@@ -1,31 +1,140 @@
 @import "tailwindcss";
 
+:root {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  color-scheme: dark;
+}
+
+/* ============================================================
+   1. TEMA PADRÃO: DARK GOLD & WHITE (Preto + Dourado)
+   ============================================================ */
 body {
-  background-color: #09090b; /* zinc-950 */
-  color: #f4f4f5; /* zinc-100 */
-  min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  background-color: #080b0e !important;
+  color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(245, 197, 24, 0.08) 0px, transparent 45%),
+    radial-gradient(at 100% 0%, rgba(255, 255, 255, 0.05) 0px, transparent 40%),
+    radial-gradient(at 50% 100%, rgba(212, 175, 55, 0.06) 0px, transparent 50%);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
-::selection {
-  background-color: rgba(34, 197, 94, 0.3);
-  color: #86efac;
+.font-mono {
+  font-family: 'Space Grotesk', monospace !important;
 }
 
-/* Scrollbar personalizada minimalista */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.glow-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(212, 175, 55, 0.015) 100%);
+  border: 1px solid rgba(245, 197, 24, 0.18);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+
+.glow-card:hover {
+  border-color: rgba(245, 215, 110, 0.4);
+  box-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.5), 0 0 25px 0px rgba(245, 197, 24, 0.12);
 }
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 9999px;
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #fff3c4 0%, #ffd700 50%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+
+.gold-gradient-bg {
+  background: linear-gradient(135deg, #fce082 0%, #ffd700 50%, #d4af37 100%);
+}
+
+/* ============================================================
+   2. TEMA PERSONALIZADO: ROSE GOLD & SOFT PEARL (Branco + Rosa)
+   ============================================================ */
+body.theme-rose {
+  background-color: #fcf9fa !important;
+  color: #2b2f38 !important;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(244, 114, 182, 0.14) 0px, transparent 40%),
+    radial-gradient(at 100% 0%, rgba(251, 191, 36, 0.08) 0px, transparent 35%),
+    radial-gradient(at 50% 100%, rgba(253, 242, 248, 0.85) 0px, transparent 50%) !important;
+  color-scheme: light;
+}
+
+/* Sobrescrita de Fundos Escuros e Gradientes para Branco */
+body.theme-rose [class*="bg-zinc-"],
+body.theme-rose [class*="bg-neutral-"],
+body.theme-rose [class*="bg-gray-"],
+body.theme-rose [class*="bg-slate-800"],
+body.theme-rose [class*="bg-slate-900"],
+body.theme-rose [class*="bg-black"],
+body.theme-rose [class*="from-zinc-"],
+body.theme-rose [class*="from-neutral-"],
+body.theme-rose [class*="from-black"],
+body.theme-rose [class*="to-zinc-"],
+body.theme-rose [class*="to-neutral-"],
+body.theme-rose [class*="to-black"],
+body.theme-rose .glow-card {
+  background: #ffffff !important;
+  background-image: none !important;
+  border-color: rgba(244, 114, 182, 0.22) !important;
+  box-shadow: 0 6px 20px -4px rgba(219, 39, 119, 0.05), 0 2px 6px 0 rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Textos Nítidos e Contrastados */
+body.theme-rose [class*="text-white"],
+body.theme-rose [class*="text-zinc-100"],
+body.theme-rose [class*="text-zinc-200"],
+body.theme-rose [class*="text-zinc-300"],
+body.theme-rose [class*="text-neutral-100"],
+body.theme-rose [class*="text-neutral-200"],
+body.theme-rose [class*="text-emerald-400"],
+body.theme-rose h1, body.theme-rose h2, body.theme-rose h3, body.theme-rose h4, body.theme-rose h5,
+body.theme-rose span.font-mono,
+body.theme-rose div.font-mono {
+  color: #1e2530 !important;
+}
+
+body.theme-rose [class*="text-zinc-400"],
+body.theme-rose [class*="text-zinc-500"],
+body.theme-rose [class*="text-neutral-400"],
+body.theme-rose [class*="text-neutral-500"] {
+  color: #6b7280 !important;
+}
+
+/* Pílulas de Streak e Botões Secundários */
+body.theme-rose [class*="bg-zinc-800"],
+body.theme-rose [class*="bg-zinc-900/40"],
+body.theme-rose [class*="bg-zinc-900/60"],
+body.theme-rose button.bg-zinc-800,
+body.theme-rose button.bg-zinc-900 {
+  background: #fff5f7 !important;
+  background-image: none !important;
+  color: #374151 !important;
+  border: 1px solid rgba(244, 114, 182, 0.28) !important;
+}
+
+/* Botões de Ação em Rosa Vibrante */
+body.theme-rose button.bg-emerald-500,
+body.theme-rose [class*="bg-emerald-500"],
+body.theme-rose button[type="submit"] {
+  background: linear-gradient(135deg, #fb7185 0%, #f43f5e 50%, #e11d48 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 4px 14px -2px rgba(244, 63, 94, 0.3) !important;
+}
+
+/* Bordas Gerais */
+body.theme-rose [class*="border-zinc-"],
+body.theme-rose [class*="border-neutral-"],
+body.theme-rose [class*="border-white/"] {
+  border-color: rgba(244, 114, 182, 0.2) !important;
+}
+
+/* Inputs */
+body.theme-rose input,
+body.theme-rose select,
+body.theme-rose textarea {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid rgba(244, 114, 182, 0.3) !important;
 }

@@ -1,444 +1,505 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  GraduationCap, Plus, Calendar, 
-  Calculator, Clock, Trash2, CheckCircle2 
+  Plus, Trash2, Edit3, Clock, MapPin, AlertCircle, 
+  CheckCircle2, CalendarDays, ChevronUp, X
 } from 'lucide-react';
 
 interface UniversityViewProps {
   userId: string;
 }
 
-export const UniversityView = ({ userId }: UniversityViewProps) => {
-  const [subTab, setSubTab] = useState<'schedule' | 'grades' | 'deadlines'>('grades');
-  const [loading, setLoading] = useState(false);
+interface ScheduleItem {
+  id: string;
+  course_name: string;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  room?: string;
+  class_type?: string;
+}
 
-  // Estados de Cadeiras e Notas
-  const [courses, setCourses] = useState<any[]>([]);
-  const [newCourseName, setNewCourseName] = useState('');
-  const [newCourseEcts, setNewCourseEcts] = useState(6);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
-  
-  // Notas
-  const [evalName, setEvalName] = useState('');
-  const [evalWeight, setEvalWeight] = useState('');
-  const [evalGrade, setEvalGrade] = useState('');
-  const [courseGrades, setCourseGrades] = useState<any[]>([]);
+const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const START_HOUR = 8;  // 08:00
+const END_HOUR = 19;   // 19:00
+const ROW_HEIGHT_PX = 38; // Altura compacta para caber no ecrã sem scroll
 
-  // Deadlines & Exames
-  const [deadlines, setDeadlines] = useState<any[]>([]);
-  const [deadlineTitle, setDeadlineTitle] = useState('');
-  const [deadlineType, setDeadlineType] = useState('exame');
-  const [deadlineDate, setDeadlineDate] = useState('');
-  const [deadlineLocation, setDeadlineLocation] = useState('');
+const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
+
+export function UniversityView({ userId }: UniversityViewProps) {
+  const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  // Estados de Criação / Edição
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [courseName, setCourseName] = useState('');
+  const [dayOfWeek, setDayOfWeek] = useState('Segunda');
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('11:00');
+  const [room, setRoom] = useState('');
+  const [classType, setClassType] = useState('Teórica');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    loadUniversityData();
-  }, [userId, subTab]);
+    loadSchedule();
+  }, [userId]);
 
-  const loadUniversityData = async () => {
+  const loadSchedule = async () => {
     setLoading(true);
-    // Carregar cadeiras
-    const { data: coursesData } = await supabase
-      .from('courses')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+    setErrorMsg(null);
+    try {
+      const { data, error } = await supabase
+        .from('academic_schedule')
+        .select('*')
+        .eq('user_id', userId)
+        .order('start_time', { ascending: true });
 
-    if (coursesData) {
-      setCourses(coursesData);
-      if (!selectedCourseId && coursesData.length > 0) {
-        setSelectedCourseId(coursesData[0].id);
-      }
+      if (error) throw error;
+      setSchedule(data || []);
+    } catch (err: any) {
+      console.error('Erro ao carregar horário:', err);
+      setErrorMsg('Não foi possível carregar o horário.');
+    } finally {
+      setLoading(false);
     }
-
-    // Carregar notas
-    const { data: gradesData } = await supabase
-      .from('course_grades')
-      .select('*, courses(name)')
-      .eq('user_id', userId);
-    if (gradesData) setCourseGrades(gradesData);
-
-    // Carregar deadlines
-    const { data: deadlinesData } = await supabase
-      .from('academic_deadlines')
-      .select('*, courses(name)')
-      .eq('user_id', userId)
-      .order('deadline_date', { ascending: true });
-    if (deadlinesData) setDeadlines(deadlinesData);
-
-    setLoading(false);
   };
 
-  // Criar cadeira
-  const handleAddCourse = async (e: React.FormEvent) => {
+  const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCourseName) return;
+    if (!courseName.trim()) {
+      setErrorMsg('Insere o nome da cadeira / disciplina.');
+      return;
+    }
 
-    const { data, error } = await supabase
-      .from('courses')
-      .insert({
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const payload = {
         user_id: userId,
-        name: newCourseName,
-        ects: newCourseEcts,
-        status: 'em_curso'
-      })
-      .select()
-      .single();
+        course_name: courseName.trim(),
+        day_of_week: dayOfWeek,
+        start_time: startTime,
+        end_time: endTime,
+        room: room.trim() || null,
+        class_type: classType
+      };
 
-    if (!error && data) {
-      setNewCourseName('');
-      setSelectedCourseId(data.id);
-      loadUniversityData();
+      if (editingId) {
+        const { data, error } = await supabase
+          .from('academic_schedule')
+          .update(payload)
+          .eq('id', editingId)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setSchedule(prev => prev.map(item => item.id === editingId ? data : item));
+        setSuccessMsg(`Aula de ${courseName} atualizada!`);
+      } else {
+        const { data, error } = await supabase
+          .from('academic_schedule')
+          .insert([payload])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setSchedule(prev => [...prev, data]);
+        setSuccessMsg(`Aula de ${courseName} adicionada com sucesso!`);
+      }
+
+      resetForm();
+      setTimeout(() => setSuccessMsg(null), 3500);
+    } catch (err: any) {
+      console.error('Erro ao gravar aula:', err);
+      setErrorMsg(err.message || 'Erro ao guardar dados da aula.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Adicionar avaliação à cadeira selecionada
-  const handleAddGrade = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCourseId || !evalName || !evalGrade || !evalWeight) return;
+  const handleStartEdit = (item: ScheduleItem) => {
+    setEditingId(item.id);
+    setCourseName(item.course_name);
+    setDayOfWeek(item.day_of_week);
+    setStartTime(item.start_time.slice(0, 5));
+    setEndTime(item.end_time.slice(0, 5));
+    setRoom(item.room || '');
+    setClassType(item.class_type || 'Teórica');
+    setShowAddForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-    const gradeVal = parseFloat(evalGrade.replace(',', '.'));
-    const weightVal = parseFloat(evalWeight.replace(',', '.'));
+  const resetForm = () => {
+    setEditingId(null);
+    setCourseName('');
+    setRoom('');
+    setStartTime('09:00');
+    setEndTime('11:00');
+    setClassType('Teórica');
+    setShowAddForm(false);
+  };
 
-    const { error } = await supabase.from('course_grades').insert({
-      user_id: userId,
-      course_id: selectedCourseId,
-      evaluation_name: evalName,
-      grade: gradeVal,
-      weight_percent: weightVal
-    });
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Tens a certeza que queres remover a aula de "${name}"?`)) return;
 
-    if (!error) {
-      setEvalName('');
-      setEvalGrade('');
-      setEvalWeight('');
-      loadUniversityData();
+    try {
+      const { error } = await supabase
+        .from('academic_schedule')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      setSchedule(prev => prev.filter(item => item.id !== id));
+      if (editingId === id) resetForm();
+    } catch (err: any) {
+      console.error('Erro ao apagar aula:', err);
+      setErrorMsg('Erro ao remover aula.');
     }
   };
 
-  // Adicionar Deadline / Exame
-  const handleAddDeadline = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!deadlineTitle || !deadlineDate) return;
+  const calculateCardPosition = (startTimeStr: string, endTimeStr: string) => {
+    const [startH, startM] = startTimeStr.split(':').map(Number);
+    const [endH, endM] = endTimeStr.split(':').map(Number);
 
-    const { error } = await supabase.from('academic_deadlines').insert({
-      user_id: userId,
-      course_id: selectedCourseId || null,
-      title: deadlineTitle,
-      type: deadlineType,
-      deadline_date: new Date(deadlineDate).toISOString(),
-      location: deadlineLocation,
-      status: 'por_comecar'
-    });
+    const startMinutesFromBase = (startH - START_HOUR) * 60 + startM;
+    const endMinutesFromBase = (endH - START_HOUR) * 60 + endM;
+    const durationMinutes = Math.max(30, endMinutesFromBase - startMinutesFromBase);
 
-    if (!error) {
-      setDeadlineTitle('');
-      setDeadlineDate('');
-      setDeadlineLocation('');
-      loadUniversityData();
+    const pxPerMinute = ROW_HEIGHT_PX / 60;
+    const top = Math.max(0, startMinutesFromBase * pxPerMinute);
+    const height = Math.max(26, durationMinutes * pxPerMinute - 2);
+
+    return { top, height };
+  };
+
+  const getClassTheme = (type?: string) => {
+    switch (type) {
+      case 'Teórica':
+        return {
+          card: 'bg-sky-950/90 border-sky-500/50 text-sky-200 hover:border-sky-400',
+          badge: 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+        };
+      case 'Prática':
+        return {
+          card: 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200 hover:border-emerald-400',
+          badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+        };
+      case 'Teórico-Prática':
+      default:
+        return {
+          card: 'bg-amber-950/90 border-amber-500/50 text-amber-200 hover:border-amber-400',
+          badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+        };
     }
   };
 
-  const calculateCourseAverage = (courseId: string) => {
-    const grades = courseGrades.filter(g => g.course_id === courseId);
-    if (grades.length === 0) return null;
-
-    let totalWeighted = 0;
-    let totalWeight = 0;
-
-    grades.forEach(g => {
-      totalWeighted += (Number(g.grade) * Number(g.weight_percent));
-      totalWeight += Number(g.weight_percent);
-    });
-
-    if (totalWeight === 0) return null;
-    return (totalWeighted / totalWeight).toFixed(2);
-  };
-
-  const calculateGlobalAverage = () => {
-    const averages: number[] = [];
-    courses.forEach(c => {
-      const avg = calculateCourseAverage(c.id);
-      if (avg !== null) averages.push(parseFloat(avg));
-    });
-    if (averages.length === 0) return '—';
-    return (averages.reduce((a, b) => a + b, 0) / averages.length).toFixed(2);
-  };
+  const totalGridHeight = HOURS.length * ROW_HEIGHT_PX;
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner de Média Global */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-indigo-950/40 via-zinc-900 to-zinc-900 border border-indigo-500/20 p-5 rounded-2xl">
-          <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Média Atual</span>
-          <div className="text-3xl font-black text-white mt-1 font-mono">{calculateGlobalAverage()} <span className="text-xs text-zinc-400 font-normal">/ 20</span></div>
-          <p className="text-[11px] text-zinc-400 mt-1">Calculada automaticamente com pesos</p>
+    <div className="space-y-4">
+      {/* Cabeçalho */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <span className="text-[10px] font-mono text-sky-400 font-semibold uppercase tracking-wider">
+            Área Académica
+          </span>
+          <h2 className="text-xl md:text-2xl font-extrabold text-white tracking-tight">
+            Horário Semanal & Disciplinas
+          </h2>
         </div>
 
-        <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl">
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Cadeiras Ativas</span>
-          <div className="text-3xl font-black text-white mt-1 font-mono">{courses.length}</div>
-          <p className="text-[11px] text-emerald-400 mt-1">Semestre Atual</p>
-        </div>
-
-        <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl">
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Próximos Exames</span>
-          <div className="text-3xl font-black text-white mt-1 font-mono">
-            {deadlines.filter(d => d.type === 'exame' || d.type === 'frequencia').length}
-          </div>
-          <p className="text-[11px] text-amber-400 mt-1">Avaliações agendadas</p>
-        </div>
+        <button
+          onClick={() => {
+            if (showAddForm) resetForm();
+            else setShowAddForm(true);
+          }}
+          className="px-3.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold text-xs flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer shadow-md"
+        >
+          {showAddForm ? <ChevronUp className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+          {showAddForm ? 'Fechar Painel' : 'Adicionar Aula'}
+        </button>
       </div>
 
-      {/* Navegação Secundária */}
-      <div className="flex gap-2 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-x-auto">
-        {[
-          { id: 'grades', label: 'Cadeiras & Médias', icon: Calculator },
-          { id: 'deadlines', label: 'Exames & Deadlines', icon: Clock },
-          { id: 'schedule', label: 'Horário Semanal', icon: Calendar },
-        ].map(tab => {
-          const Icon = tab.icon;
-          const isActive = subTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setSubTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30 shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Alertas */}
+      {errorMsg && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
-      {/* SEPARADOR: CADEIRAS & NOTAS */}
-      {subTab === 'grades' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="space-y-4">
-            {/* Criar Cadeira */}
-            <form onSubmit={handleAddCourse} className="bg-zinc-900/80 border border-zinc-800/80 p-5 rounded-2xl space-y-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Plus className="w-4 h-4 text-sky-400" /> Nova Cadeira
+      {successMsg && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* Formulário Retrátil */}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="rounded-2xl p-5 bg-zinc-900/90 border border-zinc-800 shadow-xl backdrop-blur-md"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold text-white flex items-center gap-2">
+                {editingId ? <Edit3 className="w-3.5 h-3.5 text-amber-400" /> : <Plus className="w-3.5 h-3.5 text-sky-400" />}
+                {editingId ? 'Editar Aula' : 'Nova Cadeira no Horário'}
               </h3>
-              <input
-                type="text"
-                placeholder="Ex: Programação, Álgebra, Redes"
-                value={newCourseName}
-                onChange={e => setNewCourseName(e.target.value)}
-                className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-                required
-              />
-              <div className="flex gap-2">
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" /> Cancelar
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveSchedule} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] text-zinc-400 font-medium">Nome da Disciplina *</label>
                 <input
-                  type="number"
-                  placeholder="ECTS (ex: 6)"
-                  value={newCourseEcts}
-                  onChange={e => setNewCourseEcts(parseInt(e.target.value) || 6)}
-                  className="w-24 bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-center text-white"
+                  type="text"
+                  placeholder="Ex: Análise Matemática..."
+                  value={courseName}
+                  onChange={(e) => setCourseName(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-500"
+                  required
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-zinc-400 font-medium">Dia da Semana</label>
+                <select
+                  value={dayOfWeek}
+                  onChange={(e) => setDayOfWeek(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500"
+                >
+                  {DAYS.map(d => (
+                    <option key={d} value={d}>{d}-feira</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-zinc-400 font-medium">Tipo de Aula</label>
+                <select
+                  value={classType}
+                  onChange={(e) => setClassType(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500"
+                >
+                  <option value="Teórica">Teórica</option>
+                  <option value="Prática">Prática</option>
+                  <option value="Teórico-Prática">Teórico-Prática</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-zinc-400 font-medium">Hora de Início</label>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500 font-mono"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-zinc-400 font-medium">Hora de Fim</label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500 font-mono"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-zinc-400 font-medium">Sala / Bloco (Opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Sala D.2.1"
+                  value={room}
+                  onChange={(e) => setRoom(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3 flex justify-end gap-2 mt-1">
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  disabled={isSubmitting}
+                  className={`px-4 py-1.5 rounded-xl text-zinc-950 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                    editingId ? 'bg-amber-400 hover:bg-amber-300' : 'bg-sky-500 hover:bg-sky-400'
+                  }`}
                 >
-                  Adicionar
+                  {editingId ? <Edit3 className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  {isSubmitting ? 'A guardar...' : editingId ? 'Guardar Alterações' : 'Confirmar e Adicionar'}
                 </button>
               </div>
             </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {/* Adicionar Nota à Cadeira Selecionada */}
-            {courses.length > 0 && (
-              <form onSubmit={handleAddGrade} className="bg-zinc-900/80 border border-zinc-800/80 p-5 rounded-2xl space-y-3">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Calculator className="w-4 h-4 text-sky-400" /> Registar Avaliação
-                </h3>
-
-                <div>
-                  <label className="text-xs text-zinc-400 block mb-1">Cadeira</label>
-                  <select
-                    value={selectedCourseId}
-                    onChange={e => setSelectedCourseId(e.target.value)}
-                    className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white focus:outline-none"
-                  >
-                    {courses.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="Elemento (ex: Teste 1, Projeto)"
-                  value={evalName}
-                  onChange={e => setEvalName(e.target.value)}
-                  className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-                  required
-                />
-
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Nota (0-20)"
-                    value={evalGrade}
-                    onChange={e => setEvalGrade(e.target.value)}
-                    className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-center text-white font-bold"
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Peso % (ex: 40)"
-                    value={evalWeight}
-                    onChange={e => setEvalWeight(e.target.value)}
-                    className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-center text-white"
-                    required
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
-                >
-                  Guardar Nota
-                </button>
-              </form>
-            )}
+      {/* Grelha Semanal Compacta sem Scroll */}
+      <div className="rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
+        <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800/80">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-sky-400" />
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Grelha Horária Semanal</h3>
           </div>
-
-          {/* Lista de Cadeiras com Médias e Notas Detalhadas */}
-          <div className="lg:col-span-2 space-y-4">
-            {courses.length === 0 ? (
-              <div className="p-8 text-center bg-zinc-900/40 border border-zinc-800 rounded-2xl text-xs text-zinc-500">
-                Ainda não adicionaste cadeiras este semestre.
-              </div>
-            ) : (
-              courses.map(course => {
-                const grades = courseGrades.filter(g => g.course_id === course.id);
-                const courseAvg = calculateCourseAverage(course.id);
-
-                return (
-                  <div key={course.id} className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl space-y-3">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="text-base font-bold text-white">{course.name}</h4>
-                        <span className="text-xs text-zinc-400">{course.ects} ECTS</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs text-zinc-400 block">Média da Cadeira</span>
-                        <span className="text-xl font-black text-sky-400 font-mono">
-                          {courseAvg ? `${courseAvg} val` : '—'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 pt-2 border-t border-zinc-800/60">
-                      {grades.length === 0 ? (
-                        <span className="text-xs text-zinc-500 italic">Sem notas registadas.</span>
-                      ) : (
-                        grades.map(g => (
-                          <div key={g.id} className="flex justify-between items-center text-xs p-2 bg-zinc-800/40 rounded-lg">
-                            <span className="text-zinc-300 font-medium">{g.evaluation_name} <span className="text-zinc-500">({g.weight_percent}%)</span></span>
-                            <span className="font-bold font-mono text-emerald-400">{g.grade}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+          <div className="flex items-center gap-3 text-[10px] font-mono">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-400 inline-block"/> Teórica</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/> Prática</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> Teórico-Prática</span>
           </div>
         </div>
-      )}
 
-      {/* SEPARADOR: DEADLINES & EXAMES */}
-      {subTab === 'deadlines' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <form onSubmit={handleAddDeadline} className="bg-zinc-900/80 border border-zinc-800/80 p-5 rounded-2xl space-y-4 h-fit">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Plus className="w-4 h-4 text-sky-400" /> Agendar Exame / Deadline
-            </h3>
-
-            <input
-              type="text"
-              placeholder="Título (ex: Exame Época Normal)"
-              value={deadlineTitle}
-              onChange={e => setDeadlineTitle(e.target.value)}
-              className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-              required
-            />
-
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                value={deadlineType}
-                onChange={e => setDeadlineType(e.target.value)}
-                className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-              >
-                <option value="exame">Exame</option>
-                <option value="frequencia">Frequência</option>
-                <option value="entrega">Trabalho</option>
-                <option value="apresentacao">Apresentação</option>
-              </select>
-
-              <input
-                type="datetime-local"
-                value={deadlineDate}
-                onChange={e => setDeadlineDate(e.target.value)}
-                className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-                required
-              />
+        {loading ? (
+          <div className="text-xs text-zinc-500 py-8 text-center font-mono">A carregar horário...</div>
+        ) : (
+          <div className="w-full">
+            {/* Cabeçalho dos Dias */}
+            <div className="grid grid-cols-[56px_repeat(6,1fr)] border-b border-zinc-800 pb-1.5 text-center text-xs font-bold text-zinc-400">
+              <div className="font-mono text-[11px] text-zinc-500">Hora</div>
+              {DAYS.map(day => (
+                <div key={day} className="border-l border-zinc-800/60 text-zinc-200">
+                  {day}-feira
+                </div>
+              ))}
             </div>
 
-            <input
-              type="text"
-              placeholder="Sala / Local (ex: Sala B2)"
-              value={deadlineLocation}
-              onChange={e => setDeadlineLocation(e.target.value)}
-              className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-            />
-
-            <button
-              type="submit"
-              className="w-full py-2.5 bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-            >
-              Adicionar Deadline
-            </button>
-          </form>
-
-          <div className="lg:col-span-2 space-y-3">
-            {deadlines.length === 0 ? (
-              <div className="p-8 text-center bg-zinc-900/40 border border-zinc-800 rounded-2xl text-xs text-zinc-500">
-                Nenhum exame ou deadline pendente.
+            {/* Corpo da Grelha */}
+            <div className="relative grid grid-cols-[56px_repeat(6,1fr)]" style={{ height: `${totalGridHeight}px` }}>
+              {/* Linhas de Fundo e Blocos de Horas */}
+              <div className="col-span-7 absolute inset-0 pointer-events-none flex flex-col">
+                {HOURS.map(h => (
+                  <div 
+                    key={h} 
+                    style={{ height: `${ROW_HEIGHT_PX}px` }} 
+                    className="border-b border-zinc-800/40 w-full"
+                  />
+                ))}
               </div>
-            ) : (
-              deadlines.map(d => (
-                <div key={d.id} className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-indigo-400">{d.type}</span>
-                    <h4 className="text-sm font-bold text-white">{d.title}</h4>
-                    <span className="text-xs text-zinc-400">{new Date(d.deadline_date).toLocaleString('pt-PT')} {d.location && `• ${d.location}`}</span>
-                  </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-zinc-800 text-zinc-300 rounded-lg">
-                    {d.status}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* SEPARADOR: HORÁRIO */}
-      {subTab === 'schedule' && (
-        <div className="p-8 text-center bg-zinc-900/40 border border-zinc-800 rounded-2xl text-xs text-zinc-400">
-          <Calendar className="w-8 h-8 text-sky-400 mx-auto mb-2" />
-          Grelha de Horário Semanal por dias da semana ativa no Supabase.
-        </div>
-      )}
+              {/* Coluna com as Horas Centralizadas no Bloco */}
+              <div className="flex flex-col z-10 select-none">
+                {HOURS.map(h => (
+                  <div 
+                    key={h} 
+                    style={{ height: `${ROW_HEIGHT_PX}px` }}
+                    className="flex items-center justify-center font-mono text-[11px] text-zinc-500 font-semibold"
+                  >
+                    {h.toString().padStart(2, '0')}:00
+                  </div>
+                ))}
+              </div>
+
+              {/* Colunas dos Dias da Semana */}
+              {DAYS.map(day => {
+                const dayClasses = schedule.filter(item => 
+                  item.day_of_week.toLowerCase().startsWith(day.toLowerCase())
+                );
+
+                return (
+                  <div key={day} className="relative border-l border-zinc-800/60 h-full">
+                    {dayClasses.map(c => {
+                      const { top, height } = calculateCardPosition(c.start_time, c.end_time);
+                      const theme = getClassTheme(c.class_type);
+
+                      return (
+                        <div
+                          key={c.id}
+                          style={{
+                            position: 'absolute',
+                            top: `${top}px`,
+                            height: `${height}px`,
+                            left: '2px',
+                            right: '2px',
+                          }}
+                          className={`rounded-lg border px-2 py-1 text-xs flex flex-col justify-between overflow-hidden transition-all shadow-md group z-20 ${theme.card}`}
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-1 leading-none">
+                              <span className="font-bold text-[11px] truncate text-white">
+                                {c.course_name}
+                              </span>
+                              
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded px-1 py-0.5">
+                                <button
+                                  onClick={() => handleStartEdit(c)}
+                                  className="hover:text-amber-400 transition-colors p-0.5 cursor-pointer"
+                                  title="Editar aula"
+                                >
+                                  <Edit3 className="w-2.5 h-2.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(c.id, c.course_name)}
+                                  className="hover:text-rose-400 transition-colors p-0.5 cursor-pointer"
+                                  title="Apagar aula"
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="text-[9px] font-mono opacity-85 mt-0.5 flex items-center gap-1">
+                              <Clock className="w-2 h-2 shrink-0" />
+                              <span>{c.start_time.slice(0, 5)} - {c.end_time.slice(0, 5)}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1 mt-0.5">
+                            {c.room ? (
+                              <div className="text-[8px] font-mono opacity-80 flex items-center gap-0.5 truncate">
+                                <MapPin className="w-2 h-2 shrink-0" />
+                                <span className="truncate">{c.room}</span>
+                              </div>
+                            ) : <span />}
+
+                            {c.class_type && (
+                              <span className={`text-[7px] font-bold px-1 py-0.2 rounded border uppercase tracking-wider shrink-0 ${theme.badge}`}>
+                                {c.class_type}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
-};
+}

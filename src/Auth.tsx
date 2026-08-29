@@ -1,121 +1,147 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { supabase } from './lib/supabase';
-import { Flame, Lock, User, ArrowRight } from 'lucide-react';
+import { Crown, ArrowRight, Lock, User as UserIcon } from 'lucide-react';
 
-export const Auth: React.FC = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
+export function Auth() {
+  const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const formatEmailFromUsername = (u: string) => {
-    // Normaliza o username para minúsculas e sem espaços
-    const cleanUser = u.trim().toLowerCase().replace(/\s+/g, '');
-    return `${cleanUser}@lifemanager.app`;
-  };
+  const authEmail = `${username.trim().toLowerCase().replace(/\s+/g, '')}@lifemanager.app`;
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const cleanUsername = username.trim().toLowerCase().replace(/\s+/g, '');
-    if (cleanUsername.length < 3) {
-      setError('O username deve ter pelo menos 3 caracteres.');
-      setLoading(false);
+    if (!username.trim() || !password.trim()) {
+      setErrorMsg('Preenche o username e a palavra-passe.');
       return;
     }
 
-    const syntheticEmail = formatEmailFromUsername(cleanUsername);
+    setLoading(true);
+    setErrorMsg(null);
 
     try {
-      if (isSignUp) {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: password,
+        });
+        if (error) throw error;
+      } else {
         const { data, error } = await supabase.auth.signUp({
-          email: syntheticEmail,
+          email: authEmail,
           password: password,
           options: {
             data: {
-              username: cleanUsername,
-              full_name: cleanUsername
-            }
-          }
+              full_name: username.trim(),
+              username: username.trim().toLowerCase(),
+            },
+          },
         });
         if (error) throw error;
 
-        // Se o Supabase tiver auto-confirm ativo, já cria a sessão diretamente
-        if (data.session) {
-          return;
+        if (data.user) {
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            full_name: username.trim(),
+            username: username.trim().toLowerCase(),
+            theme: 'gold'
+          });
         }
-
-        alert('Conta criada com sucesso! Podes agora entrar com o teu username.');
-        setIsSignUp(false);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: syntheticEmail,
-          password: password,
-        });
-        if (error) throw error;
       }
     } catch (err: any) {
-      if (err.message?.includes('Invalid login credentials')) {
-        setError('Username ou palavra-passe incorretos.');
-      } else if (err.message?.includes('User already registered')) {
-        setError('Este username já está em uso. Escolhe outro.');
-      } else {
-        setError(err.message || 'Ocorreu um erro ao processar o login.');
-      }
+      console.error('Erro na autenticação:', err);
+      setErrorMsg(
+        err.message === 'Invalid login credentials'
+          ? 'Username ou palavra-passe incorretos.'
+          : err.message || 'Ocorreu um erro na autenticação.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-zinc-950">
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800/80 rounded-2xl p-8 shadow-2xl backdrop-blur-xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
-            <Flame className="w-7 h-7" />
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#080b0e] text-zinc-100">
+      <div className="w-full max-w-md rounded-3xl p-8 border border-[#d4af37]/30 bg-[#0e1217]/95 backdrop-blur-2xl shadow-2xl relative overflow-hidden">
+        {/* Glow Dourado de Fundo */}
+        <div className="absolute -top-16 -right-16 w-56 h-56 bg-[#d4af37]/15 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Cabeçalho */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-[#d4af37]/15 border border-[#d4af37]/40 flex items-center justify-center text-[#d4af37] shadow-lg shadow-[#d4af37]/10">
+            <Crown className="w-6 h-6 fill-[#d4af37]/30 text-[#d4af37]" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">Student Athlete OS</h1>
+            <h1 className="text-lg font-extrabold tracking-tight text-white flex items-center gap-1.5">
+              Life Manager <span className="text-[10px] px-1.5 py-0.5 bg-gradient-to-r from-amber-300 to-amber-500 text-zinc-950 font-black rounded shadow-sm">PRO</span>
+            </h1>
             <p className="text-xs text-zinc-400">O teu ecossistema de performance diária</p>
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-            {error}
+        {/* Seletor Iniciar Sessão / Criar Conta */}
+        <div className="grid grid-cols-2 p-1 bg-black/50 rounded-xl border border-white/[0.08] mb-6">
+          <button
+            type="button"
+            onClick={() => { setIsLogin(true); setErrorMsg(null); }}
+            className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              isLogin
+                ? 'bg-[#d4af37]/25 text-[#f5d77f] border border-[#d4af37]/50 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Iniciar Sessão
+          </button>
+          <button
+            type="button"
+            onClick={() => { setIsLogin(false); setErrorMsg(null); }}
+            className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              !isLogin
+                ? 'bg-[#d4af37]/25 text-[#f5d77f] border border-[#d4af37]/50 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Criar Conta
+          </button>
+        </div>
+
+        {/* Mensagem de Erro */}
+        {errorMsg && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium">
+            {errorMsg}
           </div>
         )}
 
-        <form onSubmit={handleAuth} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">Username</label>
+        {/* Formulário */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-zinc-300">Username</label>
             <div className="relative">
-              <User className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+              <UserIcon className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="ex: gabriel21"
-                className="w-full pl-9 pr-4 py-2.5 bg-zinc-800/50 border border-zinc-700/60 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500/60 transition-colors"
+                placeholder="ex: atleta_10"
+                className="w-full bg-[#080b0e] border border-zinc-800 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#d4af37]"
+                required
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">Palavra-passe</label>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-zinc-300">Palavra-passe</label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+              <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="password"
-                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-9 pr-4 py-2.5 bg-zinc-800/50 border border-zinc-700/60 rounded-xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500/60 transition-colors"
+                className="w-full bg-[#080b0e] border border-zinc-800 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#d4af37]"
+                required
               />
             </div>
           </div>
@@ -123,28 +149,27 @@ export const Auth: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-lg shadow-emerald-500/10 cursor-pointer disabled:opacity-50"
+            style={{
+              background: 'linear-gradient(135deg, #fce082 0%, #ffd700 50%, #d4af37 100%)',
+              color: '#0a0d12',
+            }}
+            className="w-full mt-3 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] transition-all shadow-lg shadow-[#d4af37]/20 cursor-pointer disabled:opacity-50"
           >
-            {loading ? 'A processar...' : isSignUp ? 'Criar Conta' : 'Entrar no Hub'}
-            <ArrowRight className="w-4 h-4" />
+            <span>{loading ? 'A processar...' : isLogin ? 'Entrar' : 'Criar Registo'}</span>
+            <ArrowRight className="w-4 h-4 text-zinc-950" />
           </button>
         </form>
 
-        <div className="mt-6 text-center">
+        <div className="mt-6 pt-4 border-t border-white/[0.06] text-center">
           <button
             type="button"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError(null);
-            }}
-            className="text-xs text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
+            onClick={() => { setIsLogin(!isLogin); setErrorMsg(null); }}
+            className="text-[11px] text-zinc-400 hover:text-[#f5d77f] transition-colors cursor-pointer"
           >
-            {isSignUp ? 'Já tens conta? Entrar com username' : 'Não tens conta? Criar novo registo'}
+            {isLogin ? 'Não tens conta? Criar novo registo' : 'Já tens conta? Iniciar Sessão'}
           </button>
         </div>
       </div>
     </div>
   );
-};
-
-export default Auth;
+}
