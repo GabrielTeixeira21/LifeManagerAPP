@@ -1,0 +1,17 @@
+{
+  "name": "Life Manager",
+  "short_name": "LifeManager",
+  "description": "O teu ecossistema de performance diária",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080b0e",
+  "theme_color": "#080b0e",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
