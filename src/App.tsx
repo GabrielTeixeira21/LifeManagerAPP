@@ -242,7 +242,7 @@ export function App() {
   const streakAchieved = streakData.rate >= 85;
 
   return (
-    <div className={`min-h-[100dvh] flex flex-col md:flex-row pb-20 md:pb-0 ${isRoseTheme ? 'selection:bg-pink-200' : 'selection:bg-amber-400/30'}`}>
+    <div className={`min-h-[100dvh] flex flex-col md:flex-row pb-20 md:pb-0 pt-[max(env(safe-area-inset-top),1rem)] md:pt-0 ${isRoseTheme ? 'selection:bg-pink-200' : 'selection:bg-amber-400/30'}`}>
       <StreakReviveModal
         isOpen={isReviveModalOpen}
         onClose={() => {
