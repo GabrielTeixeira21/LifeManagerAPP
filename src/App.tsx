@@ -137,6 +137,20 @@ export function App() {
     checkStreakAndProfile(session.user.id);
   };
 
+  // NOVA FUNÇÃO: Zera o streak na hora!
+  const handleResetStreak = async () => {
+    if (!session) return;
+    
+    await supabase.from('profiles').update({
+      streak_days: 0,
+      streak_broken_at: new Date().toISOString() 
+    }).eq('id', session.user.id);
+
+    setCurrentStreakCount(0);
+    sessionStorage.setItem('streak_revive_dismissed', 'true');
+    setIsReviveModalOpen(false);
+  };
+
   const loadHomeData = async (userId: string) => {
     const { data: log } = await supabase
       .from('daily_logs')
@@ -250,6 +264,7 @@ export function App() {
           setIsReviveModalOpen(false);
         }}
         onRevive={handleReviveStreak}
+        onReset={handleResetStreak} // <-- ADICIONADO AQUI
         chargesLeft={streakCharges}
         streakCount={currentStreakCount}
       />

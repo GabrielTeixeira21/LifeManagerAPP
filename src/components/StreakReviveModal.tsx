@@ -5,6 +5,7 @@ interface StreakReviveModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRevive: () => void;
+  onReset: () => void;
   chargesLeft: number;
   streakCount: number;
 }
@@ -13,6 +14,7 @@ export const StreakReviveModal: React.FC<StreakReviveModalProps> = ({
   isOpen,
   onClose,
   onRevive,
+  onReset,
   chargesLeft,
   streakCount,
 }) => {
@@ -21,8 +23,10 @@ export const StreakReviveModal: React.FC<StreakReviveModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-amber-500/40 rounded-3xl p-6 sm:p-8 w-full max-w-md text-center space-y-5 shadow-2xl shadow-amber-500/10 relative">
+        
+        {/* Botão X - Apenas esconde o Pop-up temporariamente */}
         <button
-          onClick={onClose}
+          onClick={onClose} 
           className="absolute top-4 right-4 text-zinc-500 hover:text-white p-1 cursor-pointer"
         >
           <X className="w-5 h-5" />
@@ -50,12 +54,16 @@ export const StreakReviveModal: React.FC<StreakReviveModalProps> = ({
         </div>
 
         <div className="flex gap-3 pt-2">
+          
+          {/* Botão Deixar Reiniciar - Zera o Streak e permite recomeçar limpo */}
           <button
-            onClick={onClose}
+            onClick={onReset}
             className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl text-xs transition-all cursor-pointer"
           >
             Deixar Reiniciar
           </button>
+
+          {/* Botão Restaurar Fogo - Gasta 1 vida e mantém os dias */}
           <button
             onClick={onRevive}
             disabled={chargesLeft <= 0}
