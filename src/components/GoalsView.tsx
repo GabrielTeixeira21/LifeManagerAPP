@@ -15,7 +15,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
 
   const [goals, setGoals] = useState<any[]>([]);
   const [newTitle, setNewTitle] = useState('');
-  // 1. Categorias atualizadas
   const [newCategory, setNewCategory] = useState<'desporto' | 'educacao' | 'pessoal'>('desporto');
   
   const [viewDate, setViewDate] = useState(todayStr); 
@@ -173,18 +172,19 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
           />
         </div>
 
-        <div className="grid grid-cols-5 gap-2 pt-5 mt-4 border-t border-zinc-800/60">
+        {/* AJUSTE AQUI: Layout mais responsivo e com o texto curto (✓) em vez de palavra comprida */}
+        <div className="grid grid-cols-5 gap-1.5 sm:gap-2 pt-5 mt-4 border-t border-zinc-800/60">
           {milestones.map((m, idx) => {
             const unlocked = streakDays >= m.days;
             return (
               <div 
                 key={idx} 
-                className={`p-2 rounded-xl text-center border transition-all ${
+                className={`p-1.5 sm:p-2 rounded-xl flex flex-col justify-center items-center text-center border transition-all ${
                   unlocked ? m.color : 'bg-zinc-900/40 border-zinc-800 text-zinc-600'
                 }`}
               >
-                <div className="text-[10px] uppercase font-bold">{m.label}</div>
-                <div className="text-[11px] font-mono font-bold mt-0.5">{unlocked ? '✓ Desbloqueado' : `${m.days}d`}</div>
+                <div className="text-[9px] sm:text-[10px] uppercase font-bold whitespace-nowrap">{m.label}</div>
+                <div className="text-[12px] font-mono font-bold mt-0.5">{unlocked ? '✓' : `${m.days}d`}</div>
               </div>
             );
           })}
@@ -214,7 +214,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
                 onChange={(e: any) => setNewCategory(e.target.value)}
                 className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
               >
-                {/* 2. Categorias Atualizadas no Formulário */}
                 <option value="desporto">🏀 Desporto</option>
                 <option value="educacao">🎓 Educação</option>
                 <option value="pessoal">👤 Pessoal</option>
@@ -254,7 +253,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
             />
           </div>
 
-          {/* 3. Renderização atualizada para as novas chaves */}
           {['desporto', 'educacao', 'pessoal'].map(catKey => {
             const groupGoals = goals.filter(g => g.category === catKey);
             const catLabels: any = {
