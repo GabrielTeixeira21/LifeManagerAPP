@@ -119,16 +119,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId, onLogout }) =>
           {/* Clicar na imagem abre ficheiros no PC ou Telemóvel */}
           <div 
             onClick={() => fileInputRef.current?.click()}
-            className="w-20 h-20 rounded-2xl bg-zinc-800 border-2 border-dashed border-emerald-500/40 hover:border-emerald-400 overflow-hidden flex items-center justify-center text-emerald-400 cursor-pointer relative group transition-all"
+            className="p-[2px] rounded-2xl bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-200 shadow-md shadow-amber-500/10 cursor-pointer relative group transition-all hover:scale-105"
             title="Clica para alterar foto"
           >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-9 h-9 text-zinc-500" />
-            )}
-            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-              <Camera className="w-6 h-6" />
+            <div className="w-20 h-20 rounded-[14px] bg-zinc-900 overflow-hidden flex items-center justify-center relative">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-9 h-9 text-zinc-500" />
+              )}
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                <Camera className="w-6 h-6" />
+              </div>
             </div>
           </div>
 

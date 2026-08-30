@@ -153,3 +153,30 @@ html, body {
   overscroll-behavior-y: none;
   -webkit-touch-callout: none;
 }
+
+/* --- Início do Código para o Contorno Dourado --- */
+
+/* Esta classe deve ser aplicada ao elemento HTML que contém a imagem (o 'container') */
+.profile-avatar-container {
+  /* 1. Removemos o tracejado verde antigo e qualquer borda */
+  border: none !important;
+  box-shadow: none !important;
+
+  /* 2. Criamos o contorno dourado sólido */
+  /* #D4AF37 é um tom de dourado mais suave/metálico, mas podes usar #FFD700 para um ouro mais amarelado */
+  outline: 4px solid #D4AF37 !important;
+
+  /* 3. Ajustamos para o contorno ficar ligeiramente para dentro da borda, para ficar mais elegante */
+  outline-offset: -2px;
+
+  /* 4. Mantemos os cantos arredondados (ajusta o valor se necessário para bater certo com a tua app) */
+  border-radius: 20px !important;
+
+  /* 5. Garantimos que a imagem lá dentro não ultrapassa os cantos arredondados */
+  overflow: hidden;
+
+  /* 6. Uma ligeira sombra para dar profundidade (opcional) */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Fim do Código para o Contorno Dourado --- */
