@@ -104,6 +104,32 @@ export const LifeView: React.FC<LifeViewProps> = ({ userId }) => {
     }
   };
 
+  // NOVA FUNÇÃO: Grava a água imediatamente na BD para sincronizar com a Home
+  const handleUpdateWater = async (newAmount: number) => {
+    setWaterMl(newAmount); // Atualiza no ecrã imediatamente
+
+    const parsedSleep = sleepHours.trim() !== '' ? parseFloat(sleepHours.replace(',', '.')) : null;
+    const parsedQuality = sleepQuality.trim() !== '' ? parseInt(sleepQuality, 10) : null;
+    const parsedWorkout = workoutHours.trim() !== '' ? parseFloat(workoutHours.replace(',', '.')) : null;
+    const parsedStudy = studyHours.trim() !== '' ? parseFloat(studyHours.replace(',', '.')) : null;
+
+    // Constrói o payload com a nova água e mantém os restantes dados como estão no ecrã
+    const payload = {
+      user_id: userId,
+      log_date: todayStr,
+      water_ml: newAmount,
+      mood_score: Number(moodScore) || 0,
+      sleep_hours: parsedSleep && !isNaN(parsedSleep) ? parsedSleep : null,
+      sleep_quality: parsedQuality && !isNaN(parsedQuality) ? parsedQuality : null,
+      workout_hours: parsedWorkout && !isNaN(parsedWorkout) ? parsedWorkout : null,
+      study_hours: parsedStudy && !isNaN(parsedStudy) ? parsedStudy : null,
+      muscle_soreness: Number(sorenessScore) || 0
+    };
+
+    // Grava "silenciosamente" no Supabase
+    await supabase.from('daily_logs').upsert(payload, { onConflict: 'user_id, log_date' });
+  };
+
   const handleSaveLog = async () => {
     try {
       setLoading(true);
@@ -209,7 +235,9 @@ export const LifeView: React.FC<LifeViewProps> = ({ userId }) => {
   const applyCustomMl = (isAdd: boolean) => {
     const amount = parseInt(customMl, 10) || 0;
     if (amount <= 0) return;
-    setWaterMl(v => isAdd ? v + amount : Math.max(0, v - amount));
+    
+    const newAmount = isAdd ? waterMl + amount : Math.max(0, waterMl - amount);
+    handleUpdateWater(newAmount); // Atualiza com a nova função
     setCustomMl('');
   };
 
@@ -355,6 +383,7 @@ export const LifeView: React.FC<LifeViewProps> = ({ userId }) => {
                 type="text"
                 value={waterMl}
                 onChange={(e) => setWaterMl(parseInt(e.target.value, 10) || 0)}
+                onBlur={(e) => handleUpdateWater(parseInt(e.target.value, 10) || 0)} // Também grava se escreveres um valor
                 className="w-16 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-right font-mono font-bold text-sky-400"
               />
               <span>/</span>
@@ -378,14 +407,14 @@ export const LifeView: React.FC<LifeViewProps> = ({ userId }) => {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setWaterMl(v => Math.max(0, v - 200))}
+              onClick={() => handleUpdateWater(Math.max(0, waterMl - 200))}
               className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
             >
               <Minus className="w-3.5 h-3.5" /> 200 ml
             </button>
             <button
               type="button"
-              onClick={() => setWaterMl(v => v + 200)}
+              onClick={() => handleUpdateWater(waterMl + 200)}
               className="flex-1 py-2.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" /> 200 ml
