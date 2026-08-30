@@ -230,8 +230,8 @@ export function App() {
 
   const navItems = [
     { id: 'home', label: 'Hoje', icon: Home },
-    { id: 'athletics', label: 'Atletismo', icon: Activity },
-    { id: 'university', label: 'Faculdade', icon: GraduationCap },
+    { id: 'athletics', label: 'Desporto', icon: Activity },
+    { id: 'university', label: 'Educação', icon: GraduationCap },
     { id: 'life', label: 'Vida', icon: Heart },
     { id: 'money', label: 'Finanças', icon: Wallet },
     { id: 'goals', label: 'Objetivos', icon: Target },

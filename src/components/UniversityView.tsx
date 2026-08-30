@@ -20,10 +20,12 @@ interface ScheduleItem {
   class_type?: string;
 }
 
-const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+// 1. Removido o Sábado
+const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
 const START_HOUR = 8;  // 08:00
 const END_HOUR = 19;   // 19:00
-const ROW_HEIGHT_PX = 38; // Altura compacta para caber no ecrã sem scroll
+// 2. Altura aumentada para melhor leitura (de 38 para 72)
+const ROW_HEIGHT_PX = 72; 
 
 const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
@@ -252,7 +254,7 @@ export function UniversityView({ userId }: UniversityViewProps) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="rounded-2xl p-5 bg-zinc-900/90 border border-zinc-800 shadow-xl backdrop-blur-md"
+            className="rounded-2xl p-5 bg-zinc-900/90 border border-zinc-800 shadow-xl backdrop-blur-md overflow-hidden"
           >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold text-white flex items-center gap-2">
@@ -368,137 +370,139 @@ export function UniversityView({ userId }: UniversityViewProps) {
         )}
       </AnimatePresence>
 
-      {/* Grelha Semanal Compacta sem Scroll */}
-      <div className="rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
-        <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800/80">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-sky-400" />
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Grelha Horária Semanal</h3>
+      {/* Grelha Semanal (Scroll horizontal em ecrãs muito pequenos) */}
+      <div className="rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl overflow-x-auto">
+        <div className="min-w-[700px]"> {/* Força uma largura mínima para a tabela não esmagar em mobile */}
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800/80">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-sky-400" />
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">Grelha Horária Semanal</h3>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] font-mono">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-400 inline-block"/> Teórica</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/> Prática</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> Teórico-Prática</span>
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-[10px] font-mono">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-400 inline-block"/> Teórica</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/> Prática</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> Teórico-Prática</span>
-          </div>
-        </div>
 
-        {loading ? (
-          <div className="text-xs text-zinc-500 py-8 text-center font-mono">A carregar horário...</div>
-        ) : (
-          <div className="w-full">
-            {/* Cabeçalho dos Dias */}
-            <div className="grid grid-cols-[56px_repeat(6,1fr)] border-b border-zinc-800 pb-1.5 text-center text-xs font-bold text-zinc-400">
-              <div className="font-mono text-[11px] text-zinc-500">Hora</div>
-              {DAYS.map(day => (
-                <div key={day} className="border-l border-zinc-800/60 text-zinc-200">
-                  {day}-feira
+          {loading ? (
+            <div className="text-xs text-zinc-500 py-8 text-center font-mono">A carregar horário...</div>
+          ) : (
+            <div className="w-full">
+              {/* Cabeçalho dos Dias (Alterado para 5 colunas de dias = grid-cols-5) */}
+              <div className="grid grid-cols-[56px_repeat(5,1fr)] border-b border-zinc-800 pb-1.5 text-center text-xs font-bold text-zinc-400">
+                <div className="font-mono text-[11px] text-zinc-500">Hora</div>
+                {DAYS.map(day => (
+                  <div key={day} className="border-l border-zinc-800/60 text-zinc-200">
+                    {day}-feira
+                  </div>
+                ))}
+              </div>
+
+              {/* Corpo da Grelha (Alterado para 5 colunas de dias) */}
+              <div className="relative grid grid-cols-[56px_repeat(5,1fr)]" style={{ height: `${totalGridHeight}px` }}>
+                {/* Linhas de Fundo (Alterado para col-span-6: 1 hora + 5 dias) */}
+                <div className="col-span-6 absolute inset-0 pointer-events-none flex flex-col">
+                  {HOURS.map(h => (
+                    <div 
+                      key={h} 
+                      style={{ height: `${ROW_HEIGHT_PX}px` }} 
+                      className="border-b border-zinc-800/40 w-full"
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {/* Corpo da Grelha */}
-            <div className="relative grid grid-cols-[56px_repeat(6,1fr)]" style={{ height: `${totalGridHeight}px` }}>
-              {/* Linhas de Fundo e Blocos de Horas */}
-              <div className="col-span-7 absolute inset-0 pointer-events-none flex flex-col">
-                {HOURS.map(h => (
-                  <div 
-                    key={h} 
-                    style={{ height: `${ROW_HEIGHT_PX}px` }} 
-                    className="border-b border-zinc-800/40 w-full"
-                  />
-                ))}
-              </div>
+                {/* Coluna das Horas */}
+                <div className="flex flex-col z-10 select-none">
+                  {HOURS.map(h => (
+                    <div 
+                      key={h} 
+                      style={{ height: `${ROW_HEIGHT_PX}px` }}
+                      className="flex items-start justify-center font-mono text-[11px] text-zinc-500 font-semibold pt-1"
+                    >
+                      {h.toString().padStart(2, '0')}:00
+                    </div>
+                  ))}
+                </div>
 
-              {/* Coluna com as Horas Centralizadas no Bloco */}
-              <div className="flex flex-col z-10 select-none">
-                {HOURS.map(h => (
-                  <div 
-                    key={h} 
-                    style={{ height: `${ROW_HEIGHT_PX}px` }}
-                    className="flex items-center justify-center font-mono text-[11px] text-zinc-500 font-semibold"
-                  >
-                    {h.toString().padStart(2, '0')}:00
-                  </div>
-                ))}
-              </div>
+                {/* Colunas dos Dias da Semana */}
+                {DAYS.map(day => {
+                  const dayClasses = schedule.filter(item => 
+                    item.day_of_week.toLowerCase().startsWith(day.toLowerCase())
+                  );
 
-              {/* Colunas dos Dias da Semana */}
-              {DAYS.map(day => {
-                const dayClasses = schedule.filter(item => 
-                  item.day_of_week.toLowerCase().startsWith(day.toLowerCase())
-                );
+                  return (
+                    <div key={day} className="relative border-l border-zinc-800/60 h-full">
+                      {dayClasses.map(c => {
+                        const { top, height } = calculateCardPosition(c.start_time, c.end_time);
+                        const theme = getClassTheme(c.class_type);
 
-                return (
-                  <div key={day} className="relative border-l border-zinc-800/60 h-full">
-                    {dayClasses.map(c => {
-                      const { top, height } = calculateCardPosition(c.start_time, c.end_time);
-                      const theme = getClassTheme(c.class_type);
+                        return (
+                          <div
+                            key={c.id}
+                            style={{
+                              position: 'absolute',
+                              top: `${top}px`,
+                              height: `${height}px`,
+                              left: '4px',
+                              right: '4px',
+                            }}
+                            className={`rounded-lg border p-2 text-xs flex flex-col justify-between overflow-hidden transition-all shadow-md group z-20 ${theme.card}`}
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-1 leading-tight">
+                                <span className="font-bold text-[12px] text-white line-clamp-2">
+                                  {c.course_name}
+                                </span>
+                                
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded px-1.5 py-1">
+                                  <button
+                                    onClick={() => handleStartEdit(c)}
+                                    className="hover:text-amber-400 transition-colors cursor-pointer"
+                                    title="Editar aula"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(c.id, c.course_name)}
+                                    className="hover:text-rose-400 transition-colors cursor-pointer"
+                                    title="Apagar aula"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
 
-                      return (
-                        <div
-                          key={c.id}
-                          style={{
-                            position: 'absolute',
-                            top: `${top}px`,
-                            height: `${height}px`,
-                            left: '2px',
-                            right: '2px',
-                          }}
-                          className={`rounded-lg border px-2 py-1 text-xs flex flex-col justify-between overflow-hidden transition-all shadow-md group z-20 ${theme.card}`}
-                        >
-                          <div>
-                            <div className="flex items-start justify-between gap-1 leading-none">
-                              <span className="font-bold text-[11px] truncate text-white">
-                                {c.course_name}
-                              </span>
-                              
-                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded px-1 py-0.5">
-                                <button
-                                  onClick={() => handleStartEdit(c)}
-                                  className="hover:text-amber-400 transition-colors p-0.5 cursor-pointer"
-                                  title="Editar aula"
-                                >
-                                  <Edit3 className="w-2.5 h-2.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(c.id, c.course_name)}
-                                  className="hover:text-rose-400 transition-colors p-0.5 cursor-pointer"
-                                  title="Apagar aula"
-                                >
-                                  <Trash2 className="w-2.5 h-2.5" />
-                                </button>
+                              <div className="text-[10px] font-mono opacity-85 mt-1 flex items-center gap-1.5">
+                                <Clock className="w-3 h-3 shrink-0" />
+                                <span>{c.start_time.slice(0, 5)} - {c.end_time.slice(0, 5)}</span>
                               </div>
                             </div>
 
-                            <div className="text-[9px] font-mono opacity-85 mt-0.5 flex items-center gap-1">
-                              <Clock className="w-2 h-2 shrink-0" />
-                              <span>{c.start_time.slice(0, 5)} - {c.end_time.slice(0, 5)}</span>
+                            <div className="flex items-center justify-between gap-2 mt-1">
+                              {c.room ? (
+                                <div className="text-[10px] font-mono opacity-80 flex items-center gap-1 truncate">
+                                  <MapPin className="w-3 h-3 shrink-0" />
+                                  <span className="truncate">{c.room}</span>
+                                </div>
+                              ) : <span />}
+
+                              {c.class_type && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${theme.badge}`}>
+                                  {c.class_type}
+                                </span>
+                              )}
                             </div>
                           </div>
-
-                          <div className="flex items-center justify-between gap-1 mt-0.5">
-                            {c.room ? (
-                              <div className="text-[8px] font-mono opacity-80 flex items-center gap-0.5 truncate">
-                                <MapPin className="w-2 h-2 shrink-0" />
-                                <span className="truncate">{c.room}</span>
-                              </div>
-                            ) : <span />}
-
-                            {c.class_type && (
-                              <span className={`text-[7px] font-bold px-1 py-0.2 rounded border uppercase tracking-wider shrink-0 ${theme.badge}`}>
-                                {c.class_type}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

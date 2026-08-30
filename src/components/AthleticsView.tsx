@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Trophy, Plus, Dumbbell, Timer, 
-  Calendar, Trash2, TrendingUp 
+  Calendar, Trash2, TrendingUp, Activity
 } from 'lucide-react';
 
 interface AthleticsViewProps {
@@ -19,10 +19,8 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
   const [workoutType, setWorkoutType] = useState('Velocidade');
   const [targetPace, setTargetPace] = useState('');
   const [recoveryInterval, setRecoveryInterval] = useState('2min');
-  const [repsData, setRepsData] = useState<{ rep: number; dist: string; time: string }[]>([
-    { rep: 1, dist: '200m', time: '' },
-    { rep: 2, dist: '200m', time: '' }
-  ]);
+  // Séries vazias por padrão
+  const [repsData, setRepsData] = useState<{ rep: number; dist: string; time: string }[]>([]);
 
   // Ginásio
   const [gymLogs, setGymLogs] = useState<any[]>([]);
@@ -33,11 +31,22 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
 
   // PBs & SBs com Gráficos
   const [pbs, setPbs] = useState<any[]>([]);
+  const [pbCategory, setPbCategory] = useState<'atletismo' | 'ginasio'>('atletismo');
+  
+  // Estados para Atletismo
   const [pbEvent, setPbEvent] = useState('400m');
   const [pbTime, setPbTime] = useState('');
   const [pbSeason, setPbSeason] = useState('2026/27');
   const [pbLocation, setPbLocation] = useState('');
   const [isPBType, setIsPBType] = useState(true);
+  
+  // Estados para Ginásio
+  const [gymRecordExercise, setGymRecordExercise] = useState('');
+  const [gymRecordWeight, setGymRecordWeight] = useState('');
+  
+  // Data comum para o recorde
+  const [pbDate, setPbDate] = useState(new Date().toISOString().split('T')[0]);
+  
   const [selectedChartEvent, setSelectedChartEvent] = useState('400m');
 
   // Competições
@@ -76,8 +85,9 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
         .order('date', { ascending: true });
       if (data) {
         setPbs(data);
-        if (data.length > 0 && !selectedChartEvent) {
-          setSelectedChartEvent(data[0].event_name);
+        const athletics = data.filter(d => !d.pb_category || d.pb_category === 'atletismo');
+        if (athletics.length > 0 && !selectedChartEvent) {
+          setSelectedChartEvent(athletics[0].event_name);
         }
       }
     } else if (subTab === 'comps') {
@@ -108,10 +118,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
     if (!error) {
       setWorkoutTitle('');
       setTargetPace('');
-      setRepsData([
-        { rep: 1, dist: '200m', time: '' },
-        { rep: 2, dist: '200m', time: '' }
-      ]);
+      setRepsData([]); // Volta a ficar sem séries após guardar
       loadAthleticsData();
     }
   };
@@ -171,24 +178,47 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
 
   const handleAddPB = async (e: React.FormEvent) => {
     e.preventDefault();
-    const seconds = parseFloat(pbTime.replace(',', '.'));
-    if (isNaN(seconds)) return;
+    
+    if (pbCategory === 'atletismo') {
+      const seconds = parseFloat(pbTime.replace(',', '.'));
+      if (isNaN(seconds)) return;
 
-    const { error } = await supabase.from('personal_bests').insert({
-      user_id: userId,
-      event_name: pbEvent.trim(),
-      mark_seconds: seconds,
-      mark_display: pbTime,
-      is_pb: isPBType,
-      season: pbSeason,
-      location: pbLocation,
-      date: new Date().toISOString().split('T')[0]
-    });
+      const { error } = await supabase.from('personal_bests').insert({
+        user_id: userId,
+        event_name: pbEvent.trim(),
+        mark_seconds: seconds,
+        mark_display: pbTime,
+        is_pb: isPBType,
+        season: pbSeason,
+        location: pbLocation,
+        date: pbDate,
+        pb_category: 'atletismo'
+      });
 
-    if (!error) {
-      setPbTime('');
-      setPbLocation('');
-      loadAthleticsData();
+      if (!error) {
+        setPbTime('');
+        setPbLocation('');
+        loadAthleticsData();
+      }
+    } else {
+      const weightNum = parseFloat(gymRecordWeight.replace(',', '.'));
+      if (isNaN(weightNum) || !gymRecordExercise.trim()) return;
+
+      const { error } = await supabase.from('personal_bests').insert({
+        user_id: userId,
+        exercise: gymRecordExercise.trim(),
+        mark_seconds: weightNum, // Guarda o peso em número
+        mark_display: gymRecordWeight, // Mantém como texto para mostrar
+        is_pb: true, // No ginásio assume sempre como Recorde
+        date: pbDate,
+        pb_category: 'ginasio'
+      });
+
+      if (!error) {
+        setGymRecordExercise('');
+        setGymRecordWeight('');
+        loadAthleticsData();
+      }
     }
   };
 
@@ -230,12 +260,18 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
     return `⏳ ${days}d ${hours}h ${mins}m`;
   };
 
-  // Lista de provas únicas para o seletor do gráfico
-  const uniqueEvents = Array.from(new Set(pbs.map(p => p.event_name)));
+  // Filtra PBs de acordo com a categoria selecionada (Para a tabela)
+  const currentPbs = pbs.filter(p => pbCategory === 'atletismo' 
+    ? (!p.pb_category || p.pb_category === 'atletismo')
+    : p.pb_category === 'ginasio'
+  );
 
-  // Gráfico de evolução de marcas por prova
+  // Lista de provas únicas apenas para atletismo (para o gráfico)
+  const athleticsPbs = pbs.filter(p => !p.pb_category || p.pb_category === 'atletismo');
+  const uniqueEvents = Array.from(new Set(athleticsPbs.map(p => p.event_name)));
+
   const renderPbProgressionChart = () => {
-    const eventPbs = pbs.filter(p => p.event_name === selectedChartEvent);
+    const eventPbs = athleticsPbs.filter(p => p.event_name === selectedChartEvent);
 
     if (eventPbs.length < 2) {
       return (
@@ -254,7 +290,6 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
     const svgHeight = 130;
     const padding = 25;
 
-    // No atletismo, tempo menor é melhor (portanto y menor fica no topo)
     const points = eventPbs.map((p, idx) => {
       const x = padding + (idx / (eventPbs.length - 1)) * (svgWidth - padding * 2);
       const y = padding + ((Number(p.mark_seconds) - minT) / range) * (svgHeight - padding * 2);
@@ -294,6 +329,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
 
   return (
     <div className="space-y-6">
+      {/* NAVEGAÇÃO PRINCIPAL DO DESPORTO */}
       <div className="flex gap-2 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-x-auto">
         {[
           { id: 'track', label: 'Treinos de Pista', icon: Timer },
@@ -383,42 +419,51 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                 <span className="text-xs font-semibold text-zinc-300">Séries e Tempos</span>
                 <button
                   type="button"
-                  onClick={() => setRepsData([...repsData, { rep: repsData.length + 1, dist: repsData[repsData.length - 1]?.dist || '200m', time: '' }])}
+                  onClick={() => setRepsData([...repsData, { rep: repsData.length + 1, dist: repsData.length > 0 ? repsData[repsData.length - 1].dist : '200m', time: '' }])}
                   className="text-[11px] text-emerald-400 hover:text-emerald-300 cursor-pointer font-medium"
                 >
                   + Adicionar Repetição
                 </button>
               </div>
 
-              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
-                {repsData.map((rep, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500 w-7">R{rep.rep}</span>
-                    <input
-                      type="text"
-                      value={rep.dist}
-                      onChange={e => {
-                        const updated = [...repsData];
-                        updated[idx].dist = e.target.value;
-                        setRepsData(updated);
-                      }}
-                      className="w-20 bg-zinc-800/50 border border-zinc-700/60 rounded-lg p-1.5 text-xs text-center text-white"
-                      placeholder="Dist"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Tempo (ex: 27.9s)"
-                      value={rep.time}
-                      onChange={e => {
-                        const updated = [...repsData];
-                        updated[idx].time = e.target.value;
-                        setRepsData(updated);
-                      }}
-                      className="flex-1 bg-zinc-800/50 border border-zinc-700/60 rounded-lg p-1.5 text-xs text-white"
-                    />
-                  </div>
-                ))}
-              </div>
+              {repsData.length > 0 && (
+                <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                  {repsData.map((rep, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-500 w-7">R{rep.rep}</span>
+                      <input
+                        type="text"
+                        value={rep.dist}
+                        onChange={e => {
+                          const updated = [...repsData];
+                          updated[idx].dist = e.target.value;
+                          setRepsData(updated);
+                        }}
+                        className="w-20 bg-zinc-800/50 border border-zinc-700/60 rounded-lg p-1.5 text-xs text-center text-white"
+                        placeholder="Dist"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Tempo (ex: 27.9s)"
+                        value={rep.time}
+                        onChange={e => {
+                          const updated = [...repsData];
+                          updated[idx].time = e.target.value;
+                          setRepsData(updated);
+                        }}
+                        className="flex-1 bg-zinc-800/50 border border-zinc-700/60 rounded-lg p-1.5 text-xs text-white"
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => setRepsData(repsData.filter((_, i) => i !== idx).map((r, i) => ({...r, rep: i + 1})))}
+                        className="text-zinc-600 hover:text-red-400 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <button
@@ -464,13 +509,15 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                     </button>
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {Array.isArray(w.reps_data) && w.reps_data.map((r: any, i: number) => (
-                      <span key={i} className="text-[11px] bg-zinc-800/70 text-zinc-300 px-2.5 py-1 rounded-lg border border-zinc-700/40">
-                        R{r.rep} ({r.dist}): <strong className="text-emerald-400 font-mono">{r.time || '—'}</strong>
-                      </span>
-                    ))}
-                  </div>
+                  {Array.isArray(w.reps_data) && w.reps_data.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {w.reps_data.map((r: any, i: number) => (
+                        <span key={i} className="text-[11px] bg-zinc-800/70 text-zinc-300 px-2.5 py-1 rounded-lg border border-zinc-700/40">
+                          R{r.rep} ({r.dist}): <strong className="text-emerald-400 font-mono">{r.time || '—'}</strong>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -583,96 +630,177 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
         </div>
       )}
 
-      {/* 3. PBs & RECORDES COM GRÁFICO DE PROGRESSÃO */}
+      {/* 3. PBs & RECORDES */}
       {subTab === 'pbs' && (
         <div className="space-y-6">
+          {/* SELETOR ATLETISMO vs GINÁSIO */}
+          <div className="flex justify-center mb-6">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-1 inline-flex">
+              <button
+                onClick={() => setPbCategory('atletismo')}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  pbCategory === 'atletismo' ? 'bg-amber-500 text-zinc-950 shadow-md' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <Activity className="w-4 h-4" /> Atletismo
+              </button>
+              <button
+                onClick={() => setPbCategory('ginasio')}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  pbCategory === 'ginasio' ? 'bg-amber-500 text-zinc-950 shadow-md' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <Dumbbell className="w-4 h-4" /> Ginásio
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <form onSubmit={handleAddPB} className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl space-y-4 h-fit">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-amber-400" /> Adicionar Recorde
+                <Trophy className="w-4 h-4 text-amber-400" /> 
+                {pbCategory === 'atletismo' ? 'Adicionar Marca de Pista' : 'Adicionar Recorde de Ginásio'}
               </h3>
               
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">Prova</label>
-                <input
-                  type="text"
-                  value={pbEvent}
-                  onChange={e => setPbEvent(e.target.value)}
-                  placeholder="Ex: 400m, 400m Barreiras, 200m"
-                  className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-                  required
-                />
-              </div>
+              {pbCategory === 'atletismo' ? (
+                // FORMULÁRIO ATLETISMO
+                <>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Prova</label>
+                    <input
+                      type="text"
+                      value={pbEvent}
+                      onChange={e => setPbEvent(e.target.value)}
+                      placeholder="Ex: 400m, 400m Barreiras, 200m"
+                      className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                      required
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-zinc-400 block mb-1">Marca (segundos)</label>
-                  <input
-                    type="text"
-                    value={pbTime}
-                    onChange={e => setPbTime(e.target.value)}
-                    placeholder="Ex: 51.96"
-                    className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white font-bold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-400 block mb-1">Época</label>
-                  <input
-                    type="text"
-                    value={pbSeason}
-                    onChange={e => setPbSeason(e.target.value)}
-                    className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Marca (segundos)</label>
+                      <input
+                        type="text"
+                        value={pbTime}
+                        onChange={e => setPbTime(e.target.value)}
+                        placeholder="Ex: 51.96"
+                        className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white font-bold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Época</label>
+                      <input
+                        type="text"
+                        value={pbSeason}
+                        onChange={e => setPbSeason(e.target.value)}
+                        className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">Pista / Local</label>
-                <input
-                  type="text"
-                  value={pbLocation}
-                  onChange={e => setPbLocation(e.target.value)}
-                  placeholder="Ex: Pista de Coimbra"
-                  className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Local / Pista</label>
+                      <input
+                        type="text"
+                        value={pbLocation}
+                        onChange={e => setPbLocation(e.target.value)}
+                        placeholder="Ex: Pombal"
+                        className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Data</label>
+                      <input
+                        type="date"
+                        value={pbDate}
+                        onChange={e => setPbDate(e.target.value)}
+                        className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                        required
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPBType(true)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${isPBType ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
-                >
-                  PB Absoluto
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPBType(false)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${!isPBType ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
-                >
-                  SB da Época
-                </button>
-              </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsPBType(true)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${isPBType ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      PB Absoluto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPBType(false)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${!isPBType ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      SB da Época
+                    </button>
+                  </div>
+                </>
+              ) : (
+                // FORMULÁRIO GINÁSIO
+                <>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Exercício</label>
+                    <input
+                      type="text"
+                      value={gymRecordExercise}
+                      onChange={e => setGymRecordExercise(e.target.value)}
+                      placeholder="Ex: Squat, Bench Press..."
+                      className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Carga (kg)</label>
+                      <input
+                        type="text"
+                        value={gymRecordWeight}
+                        onChange={e => setGymRecordWeight(e.target.value)}
+                        placeholder="Ex: 120"
+                        className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white font-bold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Data</label>
+                      <input
+                        type="date"
+                        value={pbDate}
+                        onChange={e => setPbDate(e.target.value)}
+                        className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                        required
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <button
                 type="submit"
                 className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
               >
-                Guardar Marca Oficial
+                Guardar {pbCategory === 'atletismo' ? 'Marca Oficial' : 'Recorde de Ginásio'}
               </button>
             </form>
 
             <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {pbs.length === 0 ? (
+              {currentPbs.length === 0 ? (
                 <div className="sm:col-span-2 p-8 text-center bg-zinc-900/40 border border-zinc-800 rounded-2xl text-xs text-zinc-500">
-                  Ainda não adicionaste nenhum PB ou SB.
+                  {pbCategory === 'atletismo' ? 'Ainda não adicionaste nenhum PB ou SB.' : 'Ainda não adicionaste recordes de carga.'}
                 </div>
               ) : (
-                pbs.map(pb => (
+                currentPbs.map(pb => (
                   <div key={pb.id} className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-900/60 border border-amber-500/20 p-5 rounded-2xl relative flex flex-col justify-between">
                     <div className="flex justify-between items-start">
-                      <span className="text-xs font-bold text-amber-400 tracking-wider uppercase">{pb.event_name}</span>
+                      <span className="text-xs font-bold text-amber-400 tracking-wider uppercase">
+                        {pbCategory === 'atletismo' ? pb.event_name : pb.exercise}
+                      </span>
                       <button
                         onClick={() => handleDeletePB(pb.id)}
                         className="text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
@@ -682,15 +810,25 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                     </div>
                     
                     <div className="my-3">
-                      <div className="text-3xl font-black text-white font-mono tracking-tight">{pb.mark_display}s</div>
-                      <div className="text-[11px] text-zinc-400 mt-1">{pb.location || 'Competição Oficial'}</div>
+                      <div className="text-3xl font-black text-white font-mono tracking-tight">
+                        {pbCategory === 'atletismo' ? `${pb.mark_display}s` : `${pb.mark_display} kg`}
+                      </div>
                     </div>
 
                     <div className="flex justify-between items-center text-[11px] border-t border-zinc-800/80 pt-2 text-zinc-400">
-                      <span>Época {pb.season}</span>
-                      <span className={`px-2 py-0.5 rounded font-semibold text-[10px] ${pb.is_pb ? 'bg-amber-500/20 text-amber-300' : 'bg-sky-500/20 text-sky-300'}`}>
-                        {pb.is_pb ? '🏆 PB Absoluto' : '⚡ SB'}
-                      </span>
+                      {pbCategory === 'atletismo' ? (
+                        <>
+                          <span>Época {pb.season}</span>
+                          <span className={`px-2 py-0.5 rounded font-semibold text-[10px] ${pb.is_pb ? 'bg-amber-500/20 text-amber-300' : 'bg-sky-500/20 text-sky-300'}`}>
+                            {pb.is_pb ? '🏆 PB Absoluto' : '⚡ SB'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Registado a:</span>
+                          <span className="font-mono text-amber-400/80">{pb.date}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))
@@ -698,8 +836,8 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
             </div>
           </div>
 
-          {/* PAINEL DO GRÁFICO DE PROGRESSÃO DE MARCAS POR PROVA */}
-          {uniqueEvents.length > 0 && (
+          {/* PAINEL DO GRÁFICO (Só visível em Atletismo) */}
+          {pbCategory === 'atletismo' && uniqueEvents.length > 0 && (
             <div className="bg-zinc-900/80 border border-zinc-800 p-6 rounded-2xl space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">

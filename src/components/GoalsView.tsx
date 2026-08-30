@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Plus, CheckCircle2, Circle, 
-  Flame, Trash2, Crown, Zap, Sparkles, HeartPulse 
+  Flame, Trash2, Crown, Zap, Sparkles, HeartPulse, Calendar 
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -11,28 +11,32 @@ interface GoalsViewProps {
 }
 
 export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const [goals, setGoals] = useState<any[]>([]);
   const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState<'atletismo' | 'universidade' | 'pessoal'>('atletismo');
+  // 1. Categorias atualizadas
+  const [newCategory, setNewCategory] = useState<'desporto' | 'educacao' | 'pessoal'>('desporto');
   
-  // Estado do Streak e Vidas lidos diretamente do Supabase
+  const [viewDate, setViewDate] = useState(todayStr); 
+  const [newDate, setNewDate] = useState(todayStr);   
+  
   const [streakDays, setStreakDays] = useState(0);
   const [chargesLeft, setChargesLeft] = useState(5);
 
   useEffect(() => {
     loadGoalsAndProfile();
-  }, [userId]);
+  }, [userId, viewDate]);
 
   const loadGoalsAndProfile = async () => {
-    // 1. Carregar Objetivos
     const { data: goalsData } = await supabase
       .from('goals')
       .select('*')
       .eq('user_id', userId)
+      .eq('target_date', viewDate) 
       .order('created_at', { ascending: false });
     if (goalsData) setGoals(goalsData);
 
-    // 2. Carregar Perfil Real (Streak e Vidas)
     const { data: prof } = await supabase
       .from('profiles')
       .select('streak_days, streak_freeze_charges')
@@ -53,12 +57,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
       user_id: userId,
       title: newTitle.trim(),
       category: newCategory,
+      target_date: newDate, 
       completed: false
     });
 
     if (!error) {
       setNewTitle('');
-      loadGoalsAndProfile();
+      if (newDate !== viewDate) {
+        setViewDate(newDate);
+      } else {
+        loadGoalsAndProfile();
+      }
     }
   };
 
@@ -89,77 +98,24 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
     loadGoalsAndProfile();
   };
 
+  const handleViewDateChange = (date: string) => {
+    setViewDate(date);
+    setNewDate(date);
+  };
+
   const totalGoals = goals.length;
   const completedGoals = goals.filter(g => g.completed).length;
   const completionRate = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
   const isTodayActive = completionRate >= 85;
+  const isViewingToday = viewDate === todayStr;
 
-  // Lógica dos 5 Níveis com Marcos
   const getFlameLevel = (days: number) => {
-    if (days >= 365) {
-      return {
-        title: 'Chama Mítica (1 Ano)',
-        badge: '👑 LENDÁRIO • 365 DIAS',
-        bg: 'from-purple-950/50 via-zinc-900 to-zinc-900 border-purple-500/50 shadow-purple-500/10',
-        flameColor: 'text-purple-400 fill-purple-400/20 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]',
-        barColor: 'bg-purple-500',
-        textColor: 'text-purple-300',
-        icon: Crown,
-      };
-    }
-    if (days >= 180) {
-      return {
-        title: 'Chama de Ouro (6 Meses)',
-        badge: '⚡ ELITE • 180 DIAS',
-        bg: 'from-amber-950/50 via-zinc-900 to-zinc-900 border-amber-400/50 shadow-amber-400/10',
-        flameColor: 'text-amber-300 fill-amber-300/20 drop-shadow-[0_0_12px_rgba(251,191,36,0.8)]',
-        barColor: 'bg-amber-400',
-        textColor: 'text-amber-300',
-        icon: Zap,
-      };
-    }
-    if (days >= 90) {
-      return {
-        title: 'Chama de Esmeralda (3 Meses)',
-        badge: '💎 INQUEBRÁVEL • 90 DIAS',
-        bg: 'from-emerald-950/50 via-zinc-900 to-zinc-900 border-emerald-500/50 shadow-emerald-500/10',
-        flameColor: 'text-emerald-400 fill-emerald-400/20 drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]',
-        barColor: 'bg-emerald-500',
-        textColor: 'text-emerald-300',
-        icon: Sparkles,
-      };
-    }
-    if (days >= 30) {
-      return {
-        title: 'Chama de Safira (1 Mês)',
-        badge: '💠 CONSISTENTE • 30 DIAS',
-        bg: 'from-cyan-950/50 via-zinc-900 to-zinc-900 border-cyan-500/50 shadow-cyan-500/10',
-        flameColor: 'text-cyan-400 fill-cyan-400/20 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]',
-        barColor: 'bg-cyan-500',
-        textColor: 'text-cyan-300',
-        icon: Flame,
-      };
-    }
-    if (days >= 7) {
-      return {
-        title: 'Chama de Bronze (7 Dias)',
-        badge: '🔥 RITMO ATIVO • 7 DIAS',
-        bg: 'from-amber-950/40 via-zinc-900 to-zinc-900 border-amber-600/40 shadow-amber-600/10',
-        flameColor: 'text-amber-500 fill-amber-500/20 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]',
-        barColor: 'bg-amber-500',
-        textColor: 'text-amber-400',
-        icon: Flame,
-      };
-    }
-    return {
-      title: 'Chama Inicial',
-      badge: 'FOGO INICIAL',
-      bg: 'from-zinc-900 to-zinc-900/60 border-zinc-800',
-      flameColor: 'text-orange-400 fill-orange-400/10',
-      barColor: 'bg-orange-500',
-      textColor: 'text-zinc-300',
-      icon: Flame,
-    };
+    if (days >= 365) return { title: 'Chama Mítica (1 Ano)', badge: '👑 LENDÁRIO • 365 DIAS', bg: 'from-purple-950/50 via-zinc-900 to-zinc-900 border-purple-500/50 shadow-purple-500/10', flameColor: 'text-purple-400 fill-purple-400/20 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]', barColor: 'bg-purple-500', textColor: 'text-purple-300', icon: Crown };
+    if (days >= 180) return { title: 'Chama de Ouro (6 Meses)', badge: '⚡ ELITE • 180 DIAS', bg: 'from-amber-950/50 via-zinc-900 to-zinc-900 border-amber-400/50 shadow-amber-400/10', flameColor: 'text-amber-300 fill-amber-300/20 drop-shadow-[0_0_12px_rgba(251,191,36,0.8)]', barColor: 'bg-amber-400', textColor: 'text-amber-300', icon: Zap };
+    if (days >= 90) return { title: 'Chama de Esmeralda (3 Meses)', badge: '💎 INQUEBRÁVEL • 90 DIAS', bg: 'from-emerald-950/50 via-zinc-900 to-zinc-900 border-emerald-500/50 shadow-emerald-500/10', flameColor: 'text-emerald-400 fill-emerald-400/20 drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]', barColor: 'bg-emerald-500', textColor: 'text-emerald-300', icon: Sparkles };
+    if (days >= 30) return { title: 'Chama de Safira (1 Mês)', badge: '💠 CONSISTENTE • 30 DIAS', bg: 'from-cyan-950/50 via-zinc-900 to-zinc-900 border-cyan-500/50 shadow-cyan-500/10', flameColor: 'text-cyan-400 fill-cyan-400/20 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]', barColor: 'bg-cyan-500', textColor: 'text-cyan-300', icon: Flame };
+    if (days >= 7) return { title: 'Chama de Bronze (7 Dias)', badge: '🔥 RITMO ATIVO • 7 DIAS', bg: 'from-amber-950/40 via-zinc-900 to-zinc-900 border-amber-600/40 shadow-amber-600/10', flameColor: 'text-amber-500 fill-amber-500/20 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]', barColor: 'bg-amber-500', textColor: 'text-amber-400', icon: Flame };
+    return { title: 'Chama Inicial', badge: 'FOGO INICIAL', bg: 'from-zinc-900 to-zinc-900/60 border-zinc-800', flameColor: 'text-orange-400 fill-orange-400/10', barColor: 'bg-orange-500', textColor: 'text-zinc-300', icon: Flame };
   };
 
   const currentFlame = getFlameLevel(streakDays);
@@ -175,12 +131,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
 
   return (
     <div className="space-y-6">
-      {/* Banner Principal com Nível Real da Base de Dados */}
       <div className={`p-6 rounded-2xl border bg-gradient-to-r ${currentFlame.bg} shadow-lg transition-all`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="p-3.5 bg-zinc-950/60 border border-zinc-800/80 rounded-2xl flex items-center justify-center">
-              <FlameIcon className={`w-9 h-9 ${currentFlame.flameColor} ${isTodayActive ? 'animate-bounce' : ''}`} />
+              <FlameIcon className={`w-9 h-9 ${currentFlame.flameColor} ${isTodayActive && isViewingToday ? 'animate-bounce' : ''}`} />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -191,10 +146,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
               </div>
               <p className="text-xs text-zinc-400 mt-1">
                 {totalGoals === 0 
-                  ? '⚠️ Cria objetivos para hoje. Sem tarefas concluídas o streak não avança.'
+                  ? `⚠️ Cria objetivos para ${isViewingToday ? 'hoje' : 'este dia'}.`
                   : isTodayActive 
-                    ? '🔥 Atingiste mais de 85%! O teu streak de 124 dias continua ativo.' 
-                    : `Completa mais ${Math.max(0, Math.ceil(totalGoals * 0.85) - completedGoals)} objetivo(s) para manter a chama acesa.`}
+                    ? `🔥 Atingiste mais de 85% ${isViewingToday ? 'hoje' : 'neste dia'}!` 
+                    : `Completa mais ${Math.max(0, Math.ceil(totalGoals * 0.85) - completedGoals)} objetivo(s) neste dia.`}
               </p>
             </div>
           </div>
@@ -211,7 +166,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
           </div>
         </div>
 
-        {/* Barra de Progresso dos 85% */}
         <div className="w-full bg-zinc-950/80 rounded-full h-2.5 mt-5 overflow-hidden border border-zinc-800">
           <div 
             className={`h-full rounded-full transition-all duration-500 ${currentFlame.barColor}`}
@@ -219,7 +173,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
           />
         </div>
 
-        {/* Marcos de Evolução */}
         <div className="grid grid-cols-5 gap-2 pt-5 mt-4 border-t border-zinc-800/60">
           {milestones.map((m, idx) => {
             const unlocked = streakDays >= m.days;
@@ -238,33 +191,46 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
         </div>
       </div>
 
-      {/* Formulário e Lista de Metas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <form onSubmit={handleAddGoal} className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl space-y-4 h-fit">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Plus className="w-4 h-4 text-emerald-400" /> Novo Objetivo Diário
+            <Plus className="w-4 h-4 text-emerald-400" /> Novo Objetivo
           </h3>
 
           <input
             type="text"
-            placeholder="Ex: Treino de Pista, 3h de Estudo, 2.5L Água"
+            placeholder="Ex: Treino de Pista, 3h de Estudo..."
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
             required
           />
 
-          <div>
-            <label className="text-xs text-zinc-400 block mb-1">Categoria</label>
-            <select
-              value={newCategory}
-              onChange={(e: any) => setNewCategory(e.target.value)}
-              className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
-            >
-              <option value="atletismo">🏃 Atletismo</option>
-              <option value="universidade">🎓 Faculdade</option>
-              <option value="pessoal">👤 Pessoal</option>
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] text-zinc-400 block mb-1">Categoria</label>
+              <select
+                value={newCategory}
+                onChange={(e: any) => setNewCategory(e.target.value)}
+                className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+              >
+                {/* 2. Categorias Atualizadas no Formulário */}
+                <option value="desporto">🏀 Desporto</option>
+                <option value="educacao">🎓 Educação</option>
+                <option value="pessoal">👤 Pessoal</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-[11px] text-zinc-400 block mb-1">Para quando?</label>
+              <input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                required
+              />
+            </div>
           </div>
 
           <button
@@ -276,11 +242,24 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
         </form>
 
         <div className="lg:col-span-2 space-y-4">
-          {['atletismo', 'universidade', 'pessoal'].map(catKey => {
+          <div className="flex items-center justify-between bg-zinc-900/60 border border-zinc-800 p-3 rounded-2xl">
+            <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-emerald-400" /> Metas do Dia
+            </span>
+            <input
+              type="date"
+              value={viewDate}
+              onChange={(e) => handleViewDateChange(e.target.value)}
+              className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500/50"
+            />
+          </div>
+
+          {/* 3. Renderização atualizada para as novas chaves */}
+          {['desporto', 'educacao', 'pessoal'].map(catKey => {
             const groupGoals = goals.filter(g => g.category === catKey);
             const catLabels: any = {
-              atletismo: '🏃 Atletismo',
-              universidade: '🎓 Faculdade',
+              desporto: '🏀 Desporto',
+              educacao: '🎓 Educação',
               pessoal: '👤 Pessoal'
             };
 
@@ -291,7 +270,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
                 </h4>
 
                 {groupGoals.length === 0 ? (
-                  <span className="text-[11px] text-zinc-500 italic block">Sem objetivos nesta categoria.</span>
+                  <span className="text-[11px] text-zinc-500 italic block">Sem objetivos nesta categoria para esta data.</span>
                 ) : (
                   groupGoals.map(goal => (
                     <div 
