@@ -107,7 +107,11 @@ export function App() {
         const today = new Date(todayStr);
         const diffDays = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (diffDays >= 1 && diffDays <= 2 && (profile.streak_freeze_charges ?? 5) > 0) {
+        // VERIFICA SE JÁ FECHASTE NESTA SESSÃO
+        const alreadyDismissed = sessionStorage.getItem('streak_revive_dismissed');
+
+        // SÓ ABRE SE AINDA NÃO TIVER SIDO DISPENSADO
+        if (diffDays >= 1 && diffDays <= 2 && (profile.streak_freeze_charges ?? 5) > 0 && !alreadyDismissed) {
           setIsReviveModalOpen(true);
         }
       }
@@ -123,6 +127,9 @@ export function App() {
       last_streak_date: todayStr,
       streak_broken_at: null
     }).eq('id', session.user.id);
+
+    // REGISTA QUE O ASSUNTO FOI TRATADO
+    sessionStorage.setItem('streak_revive_dismissed', 'true');
 
     setStreakCharges(newCharges);
     setIsReviveModalOpen(false);
@@ -238,7 +245,10 @@ export function App() {
     <div className={`min-h-screen flex flex-col md:flex-row pb-20 md:pb-0 ${isRoseTheme ? 'selection:bg-pink-200' : 'selection:bg-amber-400/30'}`}>
       <StreakReviveModal
         isOpen={isReviveModalOpen}
-        onClose={() => setIsReviveModalOpen(false)}
+        onClose={() => {
+          sessionStorage.setItem('streak_revive_dismissed', 'true');
+          setIsReviveModalOpen(false);
+        }}
         onRevive={handleReviveStreak}
         chargesLeft={streakCharges}
         streakCount={currentStreakCount}
