@@ -242,7 +242,7 @@ export function App() {
   const streakAchieved = streakData.rate >= 85;
 
   return (
-    <div className={`min-h-screen flex flex-col md:flex-row pb-20 md:pb-0 ${isRoseTheme ? 'selection:bg-pink-200' : 'selection:bg-amber-400/30'}`}>
+    <div className={`min-h-[100dvh] flex flex-col md:flex-row pb-20 md:pb-0 ${isRoseTheme ? 'selection:bg-pink-200' : 'selection:bg-amber-400/30'}`}>
       <StreakReviveModal
         isOpen={isReviveModalOpen}
         onClose={() => {
@@ -321,7 +321,7 @@ export function App() {
       </aside>
 
       {/* Main Container */}
-      <main className="flex-1 p-5 md:p-8 max-w-6xl mx-auto w-full overflow-y-auto">
+      <main className="flex-1 p-5 md:p-8 max-w-6xl mx-auto w-full">
         {activeTab === 'home' && (
           <motion.div 
             initial={{ opacity: 0, y: 12 }}
