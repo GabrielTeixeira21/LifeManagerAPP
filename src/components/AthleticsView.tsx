@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Trophy, Plus, Dumbbell, Timer, 
-  Calendar, Trash2, TrendingUp, Activity
+  Calendar, Trash2, TrendingUp, Activity, Edit2, X, Check
 } from 'lucide-react';
 
 interface AthleticsViewProps {
@@ -19,7 +19,6 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
   const [workoutType, setWorkoutType] = useState('Velocidade');
   const [targetPace, setTargetPace] = useState('');
   const [recoveryInterval, setRecoveryInterval] = useState('2min');
-  // Séries vazias por padrão
   const [repsData, setRepsData] = useState<{ rep: number; dist: string; time: string }[]>([]);
 
   // Ginásio
@@ -29,7 +28,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
   const [gymSets, setGymSets] = useState('');
   const [gymReps, setGymReps] = useState('');
 
-  // PBs & SBs com Gráficos
+  // PBs & SBs
   const [pbs, setPbs] = useState<any[]>([]);
   const [pbCategory, setPbCategory] = useState<'atletismo' | 'ginasio'>('atletismo');
   
@@ -46,7 +45,6 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
   
   // Data comum para o recorde
   const [pbDate, setPbDate] = useState(new Date().toISOString().split('T')[0]);
-  
   const [selectedChartEvent, setSelectedChartEvent] = useState('400m');
 
   // Competições
@@ -56,6 +54,15 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
   const [compLocation, setCompLocation] = useState('');
   const [compEvents, setCompEvents] = useState('400m');
   const [compTarget, setCompTarget] = useState('');
+
+  // Modal de Edição de PB / Recorde
+  const [editingPb, setEditingPb] = useState<any | null>(null);
+  const [editPbName, setEditPbName] = useState('');
+  const [editPbMark, setEditPbMark] = useState('');
+  const [editPbSeason, setEditPbSeason] = useState('');
+  const [editPbLocation, setEditPbLocation] = useState('');
+  const [editPbDate, setEditPbDate] = useState('');
+  const [editPbIsPb, setEditPbIsPb] = useState(true);
 
   useEffect(() => {
     loadAthleticsData();
@@ -118,7 +125,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
     if (!error) {
       setWorkoutTitle('');
       setTargetPace('');
-      setRepsData([]); // Volta a ficar sem séries após guardar
+      setRepsData([]);
       loadAthleticsData();
     }
   };
@@ -207,9 +214,9 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
       const { error } = await supabase.from('personal_bests').insert({
         user_id: userId,
         exercise: gymRecordExercise.trim(),
-        mark_seconds: weightNum, // Guarda o peso em número
-        mark_display: gymRecordWeight, // Mantém como texto para mostrar
-        is_pb: true, // No ginásio assume sempre como Recorde
+        mark_seconds: weightNum,
+        mark_display: gymRecordWeight,
+        is_pb: true,
         date: pbDate,
         pb_category: 'ginasio'
       });
@@ -223,8 +230,57 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
   };
 
   const handleDeletePB = async (id: string) => {
+    if (!confirm('Tens a certeza que queres eliminar este recorde?')) return;
     await supabase.from('personal_bests').delete().eq('id', id);
     loadAthleticsData();
+  };
+
+  const handleStartEditPb = (pb: any) => {
+    setEditingPb(pb);
+    const isTrack = !pb.pb_category || pb.pb_category === 'atletismo';
+    setEditPbName(isTrack ? (pb.event_name || '') : (pb.exercise || ''));
+    setEditPbMark(pb.mark_display || String(pb.mark_seconds || ''));
+    setEditPbSeason(pb.season || '');
+    setEditPbLocation(pb.location || '');
+    setEditPbDate(pb.date || new Date().toISOString().split('T')[0]);
+    setEditPbIsPb(pb.is_pb !== undefined ? pb.is_pb : true);
+  };
+
+  const handleSaveEditPb = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPb) return;
+
+    const numVal = parseFloat(editPbMark.replace(',', '.'));
+    if (isNaN(numVal)) return;
+
+    const isTrack = !editingPb.pb_category || editingPb.pb_category === 'atletismo';
+
+    const payload: any = {
+      mark_seconds: numVal,
+      mark_display: editPbMark.trim(),
+      date: editPbDate,
+      is_pb: editPbIsPb
+    };
+
+    if (isTrack) {
+      payload.event_name = editPbName.trim();
+      payload.season = editPbSeason.trim();
+      payload.location = editPbLocation.trim();
+    } else {
+      payload.exercise = editPbName.trim();
+    }
+
+    const { error } = await supabase
+      .from('personal_bests')
+      .update(payload)
+      .eq('id', editingPb.id);
+
+    if (!error) {
+      setEditingPb(null);
+      loadAthleticsData();
+    } else {
+      alert('Erro ao atualizar o recorde.');
+    }
   };
 
   const handleAddCompetition = async (e: React.FormEvent) => {
@@ -260,13 +316,11 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
     return `⏳ ${days}d ${hours}h ${mins}m`;
   };
 
-  // Filtra PBs de acordo com a categoria selecionada (Para a tabela)
   const currentPbs = pbs.filter(p => pbCategory === 'atletismo' 
     ? (!p.pb_category || p.pb_category === 'atletismo')
     : p.pb_category === 'ginasio'
   );
 
-  // Lista de provas únicas apenas para atletismo (para o gráfico)
   const athleticsPbs = pbs.filter(p => !p.pb_category || p.pb_category === 'atletismo');
   const uniqueEvents = Array.from(new Set(athleticsPbs.map(p => p.event_name)));
 
@@ -633,7 +687,6 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
       {/* 3. PBs & RECORDES */}
       {subTab === 'pbs' && (
         <div className="space-y-6">
-          {/* SELETOR ATLETISMO vs GINÁSIO */}
           <div className="flex justify-center mb-6">
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-1 inline-flex">
               <button
@@ -663,7 +716,6 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
               </h3>
               
               {pbCategory === 'atletismo' ? (
-                // FORMULÁRIO ATLETISMO
                 <>
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Prova</label>
@@ -727,21 +779,20 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                     <button
                       type="button"
                       onClick={() => setIsPBType(true)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${isPBType ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${isPBType ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
                     >
                       PB Absoluto
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsPBType(false)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${!isPBType ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${!isPBType ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
                     >
                       SB da Época
                     </button>
                   </div>
                 </>
               ) : (
-                // FORMULÁRIO GINÁSIO
                 <>
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Exercício</label>
@@ -801,12 +852,22 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                       <span className="text-xs font-bold text-amber-400 tracking-wider uppercase">
                         {pbCategory === 'atletismo' ? pb.event_name : pb.exercise}
                       </span>
-                      <button
-                        onClick={() => handleDeletePB(pb.id)}
-                        className="text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleStartEditPb(pb)}
+                          className="text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer p-1"
+                          title="Editar Recorde"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePB(pb.id)}
+                          className="text-zinc-500 hover:text-red-400 transition-colors cursor-pointer p-1"
+                          title="Eliminar Recorde"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="my-3">
@@ -836,7 +897,6 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
             </div>
           </div>
 
-          {/* PAINEL DO GRÁFICO (Só visível em Atletismo) */}
           {pbCategory === 'atletismo' && uniqueEvents.length > 0 && (
             <div className="bg-zinc-900/80 border border-zinc-800 p-6 rounded-2xl space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -957,6 +1017,124 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA EDITAR RECORDES / PBs */}
+      {editingPb && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-amber-400" />
+                Editar {editingPb.pb_category === 'ginasio' ? 'Recorde de Ginásio' : 'Marca de Pista'}
+              </h3>
+              <button
+                onClick={() => setEditingPb(null)}
+                className="text-zinc-500 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPb} className="space-y-3">
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">
+                  {editingPb.pb_category === 'ginasio' ? 'Exercício' : 'Prova'}
+                </label>
+                <input
+                  type="text"
+                  value={editPbName}
+                  onChange={e => setEditPbName(e.target.value)}
+                  className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">
+                    {editingPb.pb_category === 'ginasio' ? 'Carga (kg)' : 'Marca (segundos)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={editPbMark}
+                    onChange={e => setEditPbMark(e.target.value)}
+                    className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white font-bold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Data</label>
+                  <input
+                    type="date"
+                    value={editPbDate}
+                    onChange={e => setEditPbDate(e.target.value)}
+                    className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              {(!editingPb.pb_category || editingPb.pb_category === 'atletismo') && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Época</label>
+                      <input
+                        type="text"
+                        value={editPbSeason}
+                        onChange={e => setEditPbSeason(e.target.value)}
+                        className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Local</label>
+                      <input
+                        type="text"
+                        value={editPbLocation}
+                        onChange={e => setEditPbLocation(e.target.value)}
+                        className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditPbIsPb(true)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${editPbIsPb ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      PB Absoluto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditPbIsPb(false)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${!editPbIsPb ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      SB da Época
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingPb(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-zinc-950 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Check className="w-4 h-4" /> Guardar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

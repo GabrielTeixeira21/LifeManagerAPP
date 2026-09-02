@@ -46,7 +46,8 @@ export function App() {
   const [streakCharges, setStreakCharges] = useState(5);
   const [currentStreakCount, setCurrentStreakCount] = useState(0);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const dayIndex = new Date().getDate() % MOTIVATIONAL_QUOTES.length;
   const currentQuote = MOTIVATIONAL_QUOTES[dayIndex];
 

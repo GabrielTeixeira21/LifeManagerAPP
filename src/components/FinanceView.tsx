@@ -68,7 +68,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ userId }) => {
     const catValue = type === 'receita' ? 'Entrada' : category;
     const descValue = description.trim() || catValue;
 
-    // Envia tanto 'category' como 'category_name' para cobrir qualquer versão da tabela
     const { error } = await supabase.from('finance_transactions').insert({
       user_id: userId,
       amount: val,
@@ -94,27 +93,48 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ userId }) => {
     loadFinanceData();
   };
 
-  const handleAdjustSaving = async (goalId: string, currentVal: number, isDeposit: boolean) => {
+  // =========================================================================
+  // NOVA LÓGICA DE POUPANÇA COM DUAS OPÇÕES DE DEPÓSITO
+  // =========================================================================
+  const handleAdjustSaving = async (
+    goalId: string, 
+    currentVal: number, 
+    action: 'deposit_saldo' | 'deposit_direto' | 'withdraw'
+  ) => {
     const rawVal = adjustAmount[goalId];
     const val = parseFloat(rawVal?.replace(',', '.') || '0');
     if (isNaN(val) || val <= 0) return;
 
-    const newVal = isDeposit ? currentVal + val : Math.max(0, currentVal - val);
+    let newVal = currentVal;
+    if (action === 'deposit_saldo' || action === 'deposit_direto') {
+      newVal = currentVal + val;
+    } else if (action === 'withdraw') {
+      newVal = Math.max(0, currentVal - val);
+    }
 
-    await supabase.from('savings_goals').update({ current_amount: newVal }).eq('id', goalId);
+    // 1. Atualiza o valor no cofre
+    const { error } = await supabase
+      .from('savings_goals')
+      .update({ current_amount: newVal })
+      .eq('id', goalId);
 
-    await supabase.from('finance_transactions').insert({
-      user_id: userId,
-      amount: val,
-      type: isDeposit ? 'despesa' : 'receita',
-      category: 'Poupança',
-      category_name: 'Poupança',
-      description: isDeposit ? 'Alocação para poupança' : 'Resgate de poupança',
-      date: new Date().toISOString().split('T')[0]
-    });
+    if (!error) {
+      // 2. Se for 'deposit_saldo', retira o dinheiro da carteira principal
+      if (action === 'deposit_saldo') {
+        await supabase.from('finance_transactions').insert({
+          user_id: userId,
+          amount: val,
+          type: 'despesa', // Conta como despesa para sair do saldo disponível
+          category: 'Poupança',
+          category_name: 'Poupança',
+          description: 'Reforço de Poupança',
+          date: new Date().toISOString().split('T')[0]
+        });
+      }
 
-    setAdjustAmount({ ...adjustAmount, [goalId]: '' });
-    loadFinanceData();
+      setAdjustAmount({ ...adjustAmount, [goalId]: '' });
+      loadFinanceData();
+    }
   };
 
   const handleSaveEditGoal = async (e: React.FormEvent) => {
@@ -154,7 +174,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ userId }) => {
         <div className="bg-gradient-to-br from-emerald-950/40 via-zinc-900 to-zinc-900 border border-emerald-500/20 p-5 rounded-2xl">
           <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Saldo Disponível</span>
           <div className="text-3xl font-black text-white mt-1 font-mono">€{saldoDisponivel.toFixed(2)}</div>
-          <p className="text-[11px] text-zinc-400 mt-1">Líquido após despesas e alocações</p>
+          <p className="text-[11px] text-zinc-400 mt-1">Líquido após despesas</p>
         </div>
 
         <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl">
@@ -395,27 +415,41 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ userId }) => {
                       <span>Meta: <strong className="text-white">€{target.toFixed(2)}</strong></span>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/60">
+                    {/* BOTÕES DE AJUSTE (Com as novas opções) */}
+                    <div className="flex flex-col gap-2 pt-3 border-t border-zinc-800/60">
                       <input
                         type="text"
-                        placeholder="€ Valor"
+                        placeholder="Valor a adicionar/retirar (ex: 20)"
                         value={adjustAmount[s.id] || ''}
                         onChange={(e) => setAdjustAmount({ ...adjustAmount, [s.id]: e.target.value })}
-                        className="w-24 bg-zinc-800/50 border border-zinc-700 rounded-xl p-2 text-xs text-white font-mono"
+                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl p-2.5 text-xs text-white font-mono"
                       />
-                      <button
-                        onClick={() => handleAdjustSaving(s.id, current, true)}
-                        className="flex-1 py-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold hover:bg-emerald-500/30 cursor-pointer"
-                      >
-                        + Depositar
-                      </button>
-                      <button
-                        onClick={() => handleAdjustSaving(s.id, current, false)}
-                        className="flex-1 py-2 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold hover:bg-rose-500/30 cursor-pointer"
-                      >
-                        - Retirar
-                      </button>
+                      
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => handleAdjustSaving(s.id, current, 'deposit_saldo')}
+                          title="Adiciona e subtrai ao Saldo Disponível (Despesa)"
+                          className="py-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold hover:bg-emerald-500/30 cursor-pointer"
+                        >
+                          + Do Saldo
+                        </button>
+                        <button
+                          onClick={() => handleAdjustSaving(s.id, current, 'deposit_direto')}
+                          title="Adiciona diretamente (ex: Oferta) sem afetar o Saldo"
+                          className="py-2 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-bold hover:bg-sky-500/30 cursor-pointer"
+                        >
+                          + Extra (Direto)
+                        </button>
+                        <button
+                          onClick={() => handleAdjustSaving(s.id, current, 'withdraw')}
+                          title="Retira do cofre (não afeta o Saldo Disponível)"
+                          className="py-2 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold hover:bg-rose-500/30 cursor-pointer"
+                        >
+                          - Retirar
+                        </button>
+                      </div>
                     </div>
+
                   </div>
                 );
               })

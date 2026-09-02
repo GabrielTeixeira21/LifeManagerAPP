@@ -11,7 +11,8 @@ interface GoalsViewProps {
 }
 
 export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   const [goals, setGoals] = useState<any[]>([]);
   const [newTitle, setNewTitle] = useState('');
@@ -24,8 +25,98 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
   const [chargesLeft, setChargesLeft] = useState(5);
 
   useEffect(() => {
-    loadGoalsAndProfile();
-  }, [userId, viewDate]);
+    if (userId) {
+      runMidnightEngine().then(() => {
+        loadGoalsAndProfile();
+      });
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) {
+      loadGoalsAndProfile();
+    }
+  }, [viewDate]);
+
+  // ==========================================
+  // 🚀 O MOTOR DA MEIA-NOITE (Versão Hardcore)
+  // ==========================================
+  const runMidnightEngine = async () => {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('streak_days, streak_freeze_charges, last_streak_update')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!prof) return;
+
+    let currentStreak = prof.streak_days ?? 0;
+    let lastUpdate = prof.last_streak_update;
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+    // Se a app nunca rodou, assumimos ontem para que o motor possa avaliar o dia de ontem!
+    if (!lastUpdate) {
+      lastUpdate = yesterdayStr;
+    }
+
+    // Bugfix: Para te devolver o fogo de ontem que a app não contabilizou por ser o "1º dia" do script.
+    if (lastUpdate === todayStr && currentStreak === 0) {
+      const { data: fixGoals } = await supabase.from('goals').select('*').eq('user_id', userId).eq('target_date', yesterdayStr);
+      const totalF = fixGoals?.length || 0;
+      const compF = fixGoals?.filter(g => g.completed).length || 0;
+      if (totalF > 0 && (compF / totalF) * 100 >= 85) {
+        currentStreak = 1; // Devolve-te a chama
+        await supabase.from('profiles').update({ streak_days: currentStreak }).eq('id', userId);
+        setStreakDays(currentStreak);
+      }
+      return; 
+    }
+
+    if (lastUpdate === todayStr) return; // Já avaliou hoje.
+
+    // AVALIAÇÃO DO DIA DE ONTEM
+    if (lastUpdate <= yesterdayStr) {
+      const { data: yGoals } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('target_date', yesterdayStr);
+
+      const total = yGoals?.length || 0;
+      const completed = yGoals?.filter(g => g.completed).length || 0;
+      const rate = total > 0 ? (completed / total) * 100 : 0;
+
+      if (total > 0 && rate >= 85) {
+        // Parabéns! Cumpriu a meta.
+        currentStreak += 1;
+      } else {
+        // FALHOU! A REGRA DURA: Vai a ZERO e apaga-se a chama!
+        currentStreak = 0;
+      }
+
+      // Grava as novas contas na Base de Dados (Atualiza perfil)
+      await supabase.from('profiles').update({
+        streak_days: currentStreak,
+        last_streak_update: todayStr
+      }).eq('id', userId);
+
+      // Atualiza tabela de Streaks
+      const { data: dStreak } = await supabase.from('daily_streaks').select('*').eq('user_id', userId).maybeSingle();
+      const bestStreak = Math.max(dStreak?.best_streak || 0, currentStreak);
+      
+      if (dStreak) {
+        await supabase.from('daily_streaks').update({ current_streak: currentStreak, best_streak: bestStreak }).eq('user_id', userId);
+      } else {
+        await supabase.from('daily_streaks').insert({ user_id: userId, current_streak: currentStreak, best_streak: bestStreak });
+      }
+
+      setStreakDays(currentStreak);
+    }
+  };
+  // ==========================================
 
   const loadGoalsAndProfile = async () => {
     const { data: goalsData } = await supabase
@@ -89,7 +180,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
       })
       .eq('id', goal.id);
 
-    // O incremento automático foi removido daqui! Agora é o "App.tsx" que cuida disso no dia seguinte.
     loadGoalsAndProfile();
   };
 
