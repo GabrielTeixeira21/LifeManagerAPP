@@ -33,7 +33,6 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('home');
 
-  // Perfil e Deteção do Tema Dinâmico
   const [userProfile, setUserProfile] = useState<{ full_name?: string; username?: string; avatar_url?: string; theme?: string } | null>(null);
   const isRoseTheme = userProfile?.theme === 'rose';
 
@@ -81,7 +80,6 @@ export function App() {
     }
   }, [activeTab]);
 
-  // Aplica classe no body
   useEffect(() => {
     if (isRoseTheme) {
       document.body.classList.add('theme-rose');
@@ -90,7 +88,14 @@ export function App() {
     }
   }, [isRoseTheme]);
 
+  // Lógica Inteligente de Avaliação de Dias
   const checkStreakAndProfile = async (userId: string) => {
+    const now = new Date();
+    const currentToday = now.toISOString().split('T')[0];
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name, username, avatar_url, streak_days, streak_freeze_charges, last_streak_date, theme')
@@ -99,50 +104,84 @@ export function App() {
 
     if (profile) {
       setUserProfile(profile);
-      setStreakCharges(profile.streak_freeze_charges ?? 5);
-      setCurrentStreakCount(profile.streak_days ?? 0);
+      const charges = profile.streak_freeze_charges ?? 5;
+      setStreakCharges(charges);
 
-      if (profile.last_streak_date) {
-        const lastDate = new Date(profile.last_streak_date);
-        const today = new Date(todayStr);
-        const diffDays = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+      let currentStreak = profile.streak_days ?? 0;
+      const lastDate = profile.last_streak_date;
 
-        // VERIFICA SE JÁ FECHASTE NESTA SESSÃO
-        const alreadyDismissed = sessionStorage.getItem('streak_revive_dismissed');
+      // VERIFICA O DIA DE ONTEM SE AINDA NÃO FOI AVALIADO
+      if (lastDate !== currentToday && lastDate !== yesterdayStr) {
+        const { data: yesterdayGoals } = await supabase
+          .from('goals')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('target_date', yesterdayStr);
 
-        // SÓ ABRE SE AINDA NÃO TIVER SIDO DISPENSADO
-        if (diffDays >= 1 && diffDays <= 2 && (profile.streak_freeze_charges ?? 5) > 0 && !alreadyDismissed) {
-          setIsReviveModalOpen(true);
+        const total = yesterdayGoals?.length || 0;
+        const completed = yesterdayGoals?.filter((g: any) => g.completed).length || 0;
+        const rate = total > 0 ? (completed / total) * 100 : 0;
+
+        if (total > 0 && rate >= 85) {
+          // Ganhou o fogo de ontem! Soma o streak.
+          currentStreak += 1;
+          await supabase.from('profiles').update({
+            streak_days: currentStreak,
+            last_streak_date: yesterdayStr
+          }).eq('id', userId);
+        } else {
+          // Falhou ontem (ou não teve metas)
+          if (currentStreak > 0) {
+            const alreadyDismissed = sessionStorage.getItem('streak_revive_dismissed');
+            if (charges > 0 && !alreadyDismissed) {
+              setIsReviveModalOpen(true);
+            } else if (charges <= 0) {
+              // Sem vidas: perde o streak automaticamente e regista
+              currentStreak = 0;
+              await supabase.from('profiles').update({
+                streak_days: 0,
+                last_streak_date: yesterdayStr,
+                streak_broken_at: new Date().toISOString()
+              }).eq('id', userId);
+            }
+          } else {
+            // O streak já estava a 0, apenas atualizamos a data para não voltar a avaliar
+            await supabase.from('profiles').update({
+              last_streak_date: yesterdayStr
+            }).eq('id', userId);
+          }
         }
       }
+
+      setCurrentStreakCount(currentStreak);
     }
   };
 
   const handleReviveStreak = async () => {
     if (!session || streakCharges <= 0) return;
+    const currentToday = new Date().toISOString().split('T')[0];
 
     const newCharges = streakCharges - 1;
     await supabase.from('profiles').update({
       streak_freeze_charges: newCharges,
-      last_streak_date: todayStr,
+      last_streak_date: currentToday, // Trancamos a data para hoje
       streak_broken_at: null
     }).eq('id', session.user.id);
 
-    // REGISTA QUE O ASSUNTO FOI TRATADO
     sessionStorage.setItem('streak_revive_dismissed', 'true');
-
     setStreakCharges(newCharges);
     setIsReviveModalOpen(false);
     loadHomeData(session.user.id);
     checkStreakAndProfile(session.user.id);
   };
 
-  // NOVA FUNÇÃO: Zera o streak na hora!
   const handleResetStreak = async () => {
     if (!session) return;
+    const currentToday = new Date().toISOString().split('T')[0];
     
     await supabase.from('profiles').update({
       streak_days: 0,
+      last_streak_date: currentToday, // Impede que chateie de novo hoje
       streak_broken_at: new Date().toISOString() 
     }).eq('id', session.user.id);
 
@@ -194,7 +233,9 @@ export function App() {
     const { data: goals } = await supabase
       .from('goals')
       .select('*')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('target_date', todayStr); // Avalia a percentagem só de hoje
+    
     if (goals) {
       const total = goals.length;
       const completed = goals.filter(g => g.completed).length;
@@ -264,12 +305,11 @@ export function App() {
           setIsReviveModalOpen(false);
         }}
         onRevive={handleReviveStreak}
-        onReset={handleResetStreak} // <-- ADICIONADO AQUI
+        onReset={handleResetStreak}
         chargesLeft={streakCharges}
         streakCount={currentStreakCount}
       />
 
-      {/* Sidebar Dinâmica */}
       <aside className={`hidden md:flex flex-col w-64 p-5 backdrop-blur-2xl transition-colors duration-300 ${
         isRoseTheme 
           ? 'bg-white/80 border-r border-pink-200/60 shadow-sm' 
@@ -335,7 +375,6 @@ export function App() {
         </nav>
       </aside>
 
-      {/* Main Container */}
       <main className="flex-1 p-5 md:p-8 max-w-6xl mx-auto w-full">
         {activeTab === 'home' && (
           <motion.div 
@@ -344,7 +383,6 @@ export function App() {
             transition={{ duration: 0.35, ease: 'easeOut' }}
             className="space-y-6"
           >
-            {/* Header Hero */}
             <div className="relative overflow-hidden glow-card rounded-3xl p-6 md:p-8 backdrop-blur-xl">
               <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-5">
@@ -388,7 +426,6 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Badge de Streak */}
                 <motion.div 
                   whileHover={{ scale: 1.02 }}
                   className={`flex items-center gap-4 px-5 py-3.5 rounded-2xl border transition-all ${
@@ -429,9 +466,7 @@ export function App() {
               </div>
             </div>
 
-            {/* Quick Metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {/* Hidratação */}
               <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }} className="glow-card rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className={`text-xs font-semibold ${isRoseTheme ? 'text-slate-700' : 'text-zinc-200'}`}>Hidratação</span>
@@ -462,7 +497,6 @@ export function App() {
                 </button>
               </motion.div>
 
-              {/* Sono */}
               <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }} className="glow-card rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className={`text-xs font-semibold ${isRoseTheme ? 'text-slate-700' : 'text-zinc-200'}`}>Sono</span>
@@ -482,7 +516,6 @@ export function App() {
                 </div>
               </motion.div>
 
-              {/* Treino */}
               <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }} className="glow-card rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className={`text-xs font-semibold ${isRoseTheme ? 'text-slate-700' : 'text-zinc-200'}`}>Treino</span>
@@ -500,7 +533,6 @@ export function App() {
                 </div>
               </motion.div>
 
-              {/* Estudo */}
               <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }} className="glow-card rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className={`text-xs font-semibold ${isRoseTheme ? 'text-slate-700' : 'text-zinc-200'}`}>Estudo</span>
@@ -519,7 +551,6 @@ export function App() {
               </motion.div>
             </div>
 
-            {/* Painéis Secundários */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="glow-card rounded-2xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
@@ -550,7 +581,7 @@ export function App() {
                   <div className={`text-xs p-4 rounded-xl border ${
                     isRoseTheme ? 'text-slate-500 bg-slate-50 border-slate-100' : 'text-zinc-400 bg-black/20 border-white/[0.04]'
                   }`}>
-                    Sem treinos registados. Adiciona na aba Atletismo.
+                    Sem treinos registados. Adiciona na aba Desporto.
                   </div>
                 )}
               </div>
@@ -604,7 +635,6 @@ export function App() {
         {activeTab === 'profile' && <ProfileView userId={session.user.id} onLogout={handleLogout} />}
       </main>
 
-      {/* Bottom Bar Mobile */}
       <nav className={`md:hidden fixed bottom-0 left-0 right-0 p-2 z-50 backdrop-blur-xl flex justify-around border-t ${
         isRoseTheme ? 'bg-white/95 border-pink-200 shadow-lg' : 'bg-[#0d0e12]/95 border-amber-500/20'
       }`}>

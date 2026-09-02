@@ -89,6 +89,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
       })
       .eq('id', goal.id);
 
+    // O incremento automático foi removido daqui! Agora é o "App.tsx" que cuida disso no dia seguinte.
     loadGoalsAndProfile();
   };
 
@@ -147,7 +148,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
                 {totalGoals === 0 
                   ? `⚠️ Cria objetivos para ${isViewingToday ? 'hoje' : 'este dia'}.`
                   : isTodayActive 
-                    ? `🔥 Atingiste mais de 85% ${isViewingToday ? 'hoje' : 'neste dia'}!` 
+                    ? `🔥 Atingiste mais de 85% ${isViewingToday ? 'hoje' : 'neste dia'}! (A tua chama avança amanhã)` 
                     : `Completa mais ${Math.max(0, Math.ceil(totalGoals * 0.85) - completedGoals)} objetivo(s) neste dia.`}
               </p>
             </div>
@@ -172,7 +173,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
           />
         </div>
 
-        {/* AJUSTE AQUI: Layout mais responsivo e com o texto curto (✓) em vez de palavra comprida */}
         <div className="grid grid-cols-5 gap-1.5 sm:gap-2 pt-5 mt-4 border-t border-zinc-800/60">
           {milestones.map((m, idx) => {
             const unlocked = streakDays >= m.days;
@@ -199,7 +199,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
 
           <input
             type="text"
-            placeholder="Ex: Treino de Pista, 3h de Estudo..."
+            placeholder="Ex: Treino, 3h de Estudo..."
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
@@ -214,7 +214,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
                 onChange={(e: any) => setNewCategory(e.target.value)}
                 className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
               >
-                <option value="desporto">🏀 Desporto</option>
+                <option value="desporto">🏃🏼 Desporto</option>
                 <option value="educacao">🎓 Educação</option>
                 <option value="pessoal">👤 Pessoal</option>
               </select>
@@ -256,7 +256,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ userId }) => {
           {['desporto', 'educacao', 'pessoal'].map(catKey => {
             const groupGoals = goals.filter(g => g.category === catKey);
             const catLabels: any = {
-              desporto: '🏀 Desporto',
+              desporto: '🏃🏼 Desporto',
               educacao: '🎓 Educação',
               pessoal: '👤 Pessoal'
             };
