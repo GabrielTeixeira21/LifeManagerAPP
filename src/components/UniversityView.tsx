@@ -476,7 +476,6 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
                   <h3 className="text-xs font-bold text-white uppercase tracking-wider">Calendário Semanal</h3>
                 </div>
                 
-                {/* LEGENDA APENAS NO TEMA GOLD */}
                 {!isRoseTheme && (
                   <div className="flex items-center gap-3 text-[10px] font-mono">
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/> Teórica</span>
@@ -513,65 +512,57 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
                             const { top, height } = calculateCardPosition(c.start_time, c.end_time);
                             const theme = getClassTheme(c.class_type);
                             
-                            // SE A AULA FOR PEQUENA, DESENHA EM LINHA COMPACTA
+                            // DETETA SE A AULA É CURTA (< 52px)
                             const isShortBlock = height < 52; 
 
                             return (
                               <div 
                                 key={c.id} 
                                 style={{ position: 'absolute', top: `${top}px`, height: `${height}px`, left: '4px', right: '4px' }} 
-                                className={`rounded-lg p-1.5 text-xs flex flex-col justify-between overflow-hidden transition-all group z-20 ${theme.card}`}
+                                className={`rounded-lg p-1.5 text-xs flex overflow-hidden transition-all group z-20 ${theme.card} ${isShortBlock ? 'items-center' : 'flex-col justify-between'}`}
                               >
                                 {isShortBlock ? (
                                   /* === LAYOUT COMPACTO (Aulas curtas) === */
-                                  <div className="flex items-center justify-between gap-1 w-full h-full">
-                                    <div className="min-w-0 flex items-center gap-1.5 flex-1">
-                                      <span className="font-bold text-[10px] sm:text-[11px] truncate">
-                                        {c.course_name}
-                                      </span>
-                                      <div className="text-[8px] font-mono opacity-80 flex items-center gap-1 shrink-0">
-                                        <span>{c.start_time.slice(0, 5)}-{c.end_time.slice(0, 5)}</span>
-                                        {c.room && (
-                                          <span className="flex items-center gap-0.5">
-                                            • <MapPin className="w-2 h-2 shrink-0" />{c.room}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-
+                                  <div className="flex items-center justify-between w-full h-full gap-1">
+                                    <span className={`font-bold text-[10px] sm:text-[11px] truncate flex-1 ${isRoseTheme ? 'text-sky-950' : 'text-white'}`}>
+                                      {c.course_name}
+                                    </span>
+                                    
                                     <div className="flex items-center gap-1 shrink-0">
                                       {!isRoseTheme && c.class_type && (
-                                        <span className={`text-[7px] font-bold px-1 py-0.5 rounded uppercase tracking-widest ${theme.badge}`}>
+                                        <span className={`text-[7px] font-bold px-1 py-0.5 rounded border uppercase tracking-widest ${theme.badge}`}>
                                           {c.class_type.substring(0, 2)}
                                         </span>
                                       )}
-                                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 rounded px-1 py-0.5">
-                                        <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 transition-colors p-0.5"><Edit3 className="w-2.5 h-2.5" /></button>
-                                        <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 transition-colors p-0.5"><Trash2 className="w-2.5 h-2.5" /></button>
+                                      {/* BOTÕES SEMPRE VISÍVEIS NO MOBILE (opacity-80) E COM HOVER NO DESKTOP */}
+                                      <div className="flex items-center opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded p-0.5">
+                                        <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 text-zinc-300 transition-colors cursor-pointer p-0.5"><Edit3 className="w-2.5 h-2.5" /></button>
+                                        <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 text-zinc-300 transition-colors cursor-pointer p-0.5"><Trash2 className="w-2.5 h-2.5" /></button>
                                       </div>
                                     </div>
                                   </div>
                                 ) : (
-                                  /* === LAYOUT NORMAL (Aulas longas) === */
+                                  /* === LAYOUT NORMAL (Aulas compridas) === */
                                   <>
                                     <div>
                                       <div className="flex items-start justify-between gap-1 leading-none">
-                                        <span className="font-bold text-[10px] sm:text-[11px] line-clamp-2 leading-tight">
+                                        <span className={`font-bold text-[10px] sm:text-[11px] line-clamp-2 leading-tight ${isRoseTheme ? 'text-sky-950' : 'text-white'}`}>
                                           {c.course_name}
                                         </span>
-                                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded p-1">
-                                          <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 transition-colors cursor-pointer"><Edit3 className="w-3 h-3" /></button>
-                                          <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 transition-colors cursor-pointer"><Trash2 className="w-3 h-3" /></button>
+                                        {/* BOTÕES SEMPRE VISÍVEIS NO MOBILE (opacity-80) E COM HOVER NO DESKTOP */}
+                                        <div className="flex flex-col gap-1 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded p-1">
+                                          <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 text-zinc-300 transition-colors cursor-pointer"><Edit3 className="w-3 h-3" /></button>
+                                          <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 text-zinc-300 transition-colors cursor-pointer"><Trash2 className="w-3 h-3" /></button>
                                         </div>
                                       </div>
-                                      <div className="text-[9px] font-mono opacity-85 mt-1 flex items-center gap-1">
+                                      <div className={`text-[9px] font-mono opacity-85 mt-1 flex items-center gap-1 ${isRoseTheme ? 'text-sky-800' : ''}`}>
                                         <Clock className="w-2.5 h-2.5 shrink-0" />
                                         <span>{c.start_time.slice(0, 5)} - {c.end_time.slice(0, 5)}</span>
                                       </div>
                                     </div>
                                     <div className="flex items-center justify-between gap-1 mt-0.5">
                                       {c.room ? (
-                                        <div className="text-[9px] font-mono opacity-80 flex items-center gap-1 truncate">
+                                        <div className={`text-[9px] font-mono opacity-80 flex items-center gap-1 truncate ${isRoseTheme ? 'text-sky-800' : ''}`}>
                                           <MapPin className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{c.room}</span>
                                         </div>
                                       ) : <span />}
