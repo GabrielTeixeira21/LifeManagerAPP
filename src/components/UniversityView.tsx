@@ -9,6 +9,7 @@ import {
 
 interface UniversityViewProps {
   userId: string;
+  isRoseTheme?: boolean;
 }
 
 interface ScheduleItem {
@@ -48,7 +49,7 @@ const END_HOUR = 19;
 const ROW_HEIGHT_PX = 48; 
 const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
-export function UniversityView({ userId }: UniversityViewProps) {
+export function UniversityView({ userId, isRoseTheme = false }: UniversityViewProps) {
   // === ABAS INTERNAS ===
   const [activeTab, setActiveTab] = useState<'horario' | 'disciplinas' | 'simulador'>('horario');
 
@@ -74,7 +75,6 @@ export function UniversityView({ userId }: UniversityViewProps) {
   const [newCourseName, setNewCourseName] = useState('');
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   
-  // Edição de Disciplina
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [editingCourseName, setEditingCourseName] = useState('');
 
@@ -92,7 +92,6 @@ export function UniversityView({ userId }: UniversityViewProps) {
   const [simNextMax, setSimNextMax] = useState<number | string>('20');
   const [simNextWeight, setSimNextWeight] = useState<number | string>('50');
 
-  // Carregar dados
   useEffect(() => {
     if (userId) {
       loadSchedule();
@@ -124,7 +123,6 @@ export function UniversityView({ userId }: UniversityViewProps) {
     }
   };
 
-  // === LÓGICA DO HORÁRIO ===
   const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!courseName.trim()) return;
@@ -140,7 +138,7 @@ export function UniversityView({ userId }: UniversityViewProps) {
         start_time: startTime,
         end_time: endTime,
         room: room.trim() || null,
-        class_type: classType
+        class_type: isRoseTheme ? 'Prática' : classType 
       };
 
       if (editingId) {
@@ -202,11 +200,32 @@ export function UniversityView({ userId }: UniversityViewProps) {
     return { top, height };
   };
 
+  // ==============================================================
+  // EFEITO VIDRO (FROSTED GLASS)
+  // ==============================================================
   const getClassTheme = (type?: string) => {
+    // 1. TEMA ROSA DA TUA NAMORADA (Acrílico / Vidro Azul translúcido, limpo e sem TE/PR)
+    if (isRoseTheme) {
+      return { 
+        card: 'bg-gradient-to-br from-sky-500/30 to-sky-600/15 backdrop-blur-xl border border-sky-400/40 text-white hover:from-sky-500/40 hover:to-sky-600/25 shadow-[0_4px_20px_rgba(56,189,248,0.15)]', 
+        badge: 'hidden' 
+      };
+    }
+
+    // 2. A TUA CONTA (TEMA GOLD) - Cores mistas originais com vidro escuro
     switch (type) {
-      case 'Teórica': return { card: 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200 hover:border-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' };
-      case 'Prática': return { card: 'bg-sky-950/90 border-sky-500/50 text-sky-200 hover:border-sky-400', badge: 'bg-sky-500/20 text-sky-300 border-sky-500/30' };
-      case 'Teórico-Prática': default: return { card: 'bg-amber-950/90 border-amber-500/50 text-amber-200 hover:border-amber-400', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30' };
+      case 'Teórica': return { 
+        card: 'bg-gradient-to-br from-emerald-500/25 to-emerald-950/40 backdrop-blur-xl border border-emerald-500/40 text-emerald-100 hover:border-emerald-400', 
+        badge: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+      };
+      case 'Prática': return { 
+        card: 'bg-gradient-to-br from-sky-500/25 to-sky-950/40 backdrop-blur-xl border border-sky-500/40 text-sky-100 hover:border-sky-400', 
+        badge: 'bg-sky-500/20 text-sky-300 border border-sky-500/30' 
+      };
+      case 'Teórico-Prática': default: return { 
+        card: 'bg-gradient-to-br from-amber-500/25 to-amber-950/40 backdrop-blur-xl border border-amber-500/40 text-amber-100 hover:border-amber-400', 
+        badge: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+      };
     }
   };
 
@@ -287,7 +306,6 @@ export function UniversityView({ userId }: UniversityViewProps) {
     setSimExams(simExams.filter(e => e.id !== id));
   };
 
-  // === CALCULADORA DO SIMULADOR ===
   let isAlreadyDone = false;
   let isPossible = true;
   let verdictText = '';
@@ -417,12 +435,16 @@ export function UniversityView({ userId }: UniversityViewProps) {
                       {DAYS.map(d => <option key={d} value={d}>{d}-feira</option>)}
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-zinc-400 font-medium">Tipo de Aula</label>
-                    <select value={classType} onChange={(e) => setClassType(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500">
-                      <option value="Teórica">Teórica</option><option value="Prática">Prática</option><option value="Teórico-Prática">Teórico-Prática</option>
-                    </select>
-                  </div>
+                  
+                  {!isRoseTheme && (
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-zinc-400 font-medium">Tipo de Aula</label>
+                      <select value={classType} onChange={(e) => setClassType(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500">
+                        <option value="Teórica">Teórica</option><option value="Prática">Prática</option><option value="Teórico-Prática">Teórico-Prática</option>
+                      </select>
+                    </div>
+                  )}
+
                   <div className="space-y-1">
                     <label className="text-[11px] text-zinc-400 font-medium">Hora de Início</label>
                     <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500 font-mono" required />
@@ -453,11 +475,15 @@ export function UniversityView({ userId }: UniversityViewProps) {
                   <CalendarDays className="w-4 h-4 text-sky-400" />
                   <h3 className="text-xs font-bold text-white uppercase tracking-wider">Calendário Semanal</h3>
                 </div>
-                <div className="flex items-center gap-3 text-[10px] font-mono">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/> Teórica</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-400 inline-block"/> Prática</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> T-Prática</span>
-                </div>
+                
+                {/* LEGENDA APENAS NO TEMA GOLD */}
+                {!isRoseTheme && (
+                  <div className="flex items-center gap-3 text-[10px] font-mono">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/> Teórica</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-400 inline-block"/> Prática</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> T-Prática</span>
+                  </div>
+                )}
               </div>
 
               {loading ? (
@@ -486,22 +512,78 @@ export function UniversityView({ userId }: UniversityViewProps) {
                           {dayClasses.map(c => {
                             const { top, height } = calculateCardPosition(c.start_time, c.end_time);
                             const theme = getClassTheme(c.class_type);
+                            
+                            // SE A AULA FOR PEQUENA, DESENHA EM LINHA COMPACTA
+                            const isShortBlock = height < 52; 
+
                             return (
-                              <div key={c.id} style={{ position: 'absolute', top: `${top}px`, height: `${height}px`, left: '4px', right: '4px' }} className={`rounded-lg border p-1.5 text-xs flex flex-col justify-between overflow-hidden transition-all shadow-md group z-20 ${theme.card}`}>
-                                <div>
-                                  <div className="flex items-start justify-between gap-1 leading-none">
-                                    <span className="font-bold text-[10px] sm:text-[11px] text-white line-clamp-2 leading-tight">{c.course_name}</span>
-                                    <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded p-1">
-                                      <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 transition-colors cursor-pointer"><Edit3 className="w-3 h-3" /></button>
-                                      <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 transition-colors cursor-pointer"><Trash2 className="w-3 h-3" /></button>
+                              <div 
+                                key={c.id} 
+                                style={{ position: 'absolute', top: `${top}px`, height: `${height}px`, left: '4px', right: '4px' }} 
+                                className={`rounded-lg p-1.5 text-xs flex flex-col justify-between overflow-hidden transition-all group z-20 ${theme.card}`}
+                              >
+                                {isShortBlock ? (
+                                  /* === LAYOUT COMPACTO (Aulas curtas) === */
+                                  <div className="flex items-center justify-between gap-1 w-full h-full">
+                                    <div className="min-w-0 flex items-center gap-1.5 flex-1">
+                                      <span className="font-bold text-[10px] sm:text-[11px] truncate">
+                                        {c.course_name}
+                                      </span>
+                                      <div className="text-[8px] font-mono opacity-80 flex items-center gap-1 shrink-0">
+                                        <span>{c.start_time.slice(0, 5)}-{c.end_time.slice(0, 5)}</span>
+                                        {c.room && (
+                                          <span className="flex items-center gap-0.5">
+                                            • <MapPin className="w-2 h-2 shrink-0" />{c.room}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {!isRoseTheme && c.class_type && (
+                                        <span className={`text-[7px] font-bold px-1 py-0.5 rounded uppercase tracking-widest ${theme.badge}`}>
+                                          {c.class_type.substring(0, 2)}
+                                        </span>
+                                      )}
+                                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 rounded px-1 py-0.5">
+                                        <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 transition-colors p-0.5"><Edit3 className="w-2.5 h-2.5" /></button>
+                                        <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 transition-colors p-0.5"><Trash2 className="w-2.5 h-2.5" /></button>
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="text-[9px] font-mono opacity-85 mt-1 flex items-center gap-1"><Clock className="w-2.5 h-2.5 shrink-0" /><span>{c.start_time.slice(0, 5)} - {c.end_time.slice(0, 5)}</span></div>
-                                </div>
-                                <div className="flex items-center justify-between gap-1 mt-0.5">
-                                  {c.room ? <div className="text-[9px] font-mono opacity-80 flex items-center gap-1 truncate"><MapPin className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{c.room}</span></div> : <span />}
-                                  {c.class_type && <span className={`text-[8px] font-bold px-1 py-0.5 rounded border uppercase tracking-widest shrink-0 ${theme.badge}`}>{c.class_type.substring(0, 2)}</span>}
-                                </div>
+                                ) : (
+                                  /* === LAYOUT NORMAL (Aulas longas) === */
+                                  <>
+                                    <div>
+                                      <div className="flex items-start justify-between gap-1 leading-none">
+                                        <span className="font-bold text-[10px] sm:text-[11px] line-clamp-2 leading-tight">
+                                          {c.course_name}
+                                        </span>
+                                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded p-1">
+                                          <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 transition-colors cursor-pointer"><Edit3 className="w-3 h-3" /></button>
+                                          <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 transition-colors cursor-pointer"><Trash2 className="w-3 h-3" /></button>
+                                        </div>
+                                      </div>
+                                      <div className="text-[9px] font-mono opacity-85 mt-1 flex items-center gap-1">
+                                        <Clock className="w-2.5 h-2.5 shrink-0" />
+                                        <span>{c.start_time.slice(0, 5)} - {c.end_time.slice(0, 5)}</span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-1 mt-0.5">
+                                      {c.room ? (
+                                        <div className="text-[9px] font-mono opacity-80 flex items-center gap-1 truncate">
+                                          <MapPin className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{c.room}</span>
+                                        </div>
+                                      ) : <span />}
+                                      
+                                      {!isRoseTheme && c.class_type && (
+                                        <span className={`text-[8px] font-bold px-1 py-0.5 rounded border uppercase tracking-widest shrink-0 ${theme.badge}`}>
+                                          {c.class_type.substring(0, 2)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             );
                           })}
@@ -598,7 +680,6 @@ export function UniversityView({ userId }: UniversityViewProps) {
                           )}
                         </div>
 
-                        {/* AÇÕES DA DISCIPLINA (EDITAR, APAGAR, EXPANDIR) */}
                         <div className="flex items-center gap-2">
                           {!isEditingThis && (
                             <button 

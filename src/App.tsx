@@ -629,7 +629,7 @@ export function App() {
 
         {/* Rotas dos Módulos */}
         {activeTab === 'athletics' && <AthleticsView userId={session.user.id} />}
-        {activeTab === 'university' && <UniversityView userId={session.user.id} />}
+        {activeTab === 'university' && <UniversityView userId={session.user.id} isRoseTheme={isRoseTheme} />}
         {activeTab === 'life' && <LifeView userId={session.user.id} />}
         {activeTab === 'money' && <FinanceView userId={session.user.id} />}
         {activeTab === 'goals' && <GoalsView userId={session.user.id} />}
