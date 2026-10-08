@@ -98,11 +98,14 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
         }
       }
     } else if (subTab === 'comps') {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('competitions')
         .select('*')
         .eq('user_id', userId)
         .order('event_date', { ascending: true });
+      if (error) {
+        console.error('Erro ao carregar competições:', error);
+      }
       if (data) setCompetitions(data);
     }
     setLoading(false);
@@ -279,7 +282,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
       setEditingPb(null);
       loadAthleticsData();
     } else {
-      alert('Erro ao atualizar o recorde.');
+      alert('Erro ao atualizar o recorde: ' + error.message);
     }
   };
 
@@ -291,18 +294,31 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
 
     const { error } = await supabase.from('competitions').insert({
       user_id: userId,
-      name: compName,
+      name: compName.trim(),
       event_date: new Date(compDate).toISOString(),
-      location: compLocation,
+      location: compLocation.trim() || null,
       events_registered: eventsArray,
-      target_result: compTarget
+      target_result: compTarget.trim() || null
     });
 
-    if (!error) {
+    if (error) {
+      console.error('Erro detalhado do Supabase:', error);
+      alert(`Erro ao guardar competição: ${error.message} (Código: ${error.code})`);
+    } else {
       setCompName('');
       setCompDate('');
       setCompLocation('');
       setCompTarget('');
+      loadAthleticsData();
+    }
+  };
+
+  const handleDeleteCompetition = async (id: string) => {
+    if (!confirm('Eliminar esta competição do calendário?')) return;
+    const { error } = await supabase.from('competitions').delete().eq('id', id);
+    if (error) {
+      alert('Erro ao eliminar competição: ' + error.message);
+    } else {
       loadAthleticsData();
     }
   };
@@ -691,7 +707,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-1 inline-flex">
               <button
                 onClick={() => setPbCategory('atletismo')}
-                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all cursor-pointer ${
                   pbCategory === 'atletismo' ? 'bg-amber-500 text-zinc-950 shadow-md' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
@@ -699,7 +715,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
               </button>
               <button
                 onClick={() => setPbCategory('ginasio')}
-                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all cursor-pointer ${
                   pbCategory === 'ginasio' ? 'bg-amber-500 text-zinc-950 shadow-md' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
@@ -930,7 +946,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
         </div>
       )}
 
-      {/* 4. COMPETIÇÕES */}
+      {/* 4. COMPETIÇÕES & COUNTDOWN */}
       {subTab === 'comps' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <form onSubmit={handleAddCompetition} className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl space-y-4 h-fit">
@@ -944,7 +960,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                 type="text"
                 value={compName}
                 onChange={e => setCompName(e.target.value)}
-                placeholder="Ex: Campeonato Nacional"
+                placeholder="Ex: Campeonato Nacional Universitário"
                 className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
                 required
               />
@@ -967,19 +983,30 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                   type="text"
                   value={compLocation}
                   onChange={e => setCompLocation(e.target.value)}
-                  placeholder="Ex: Pombal / Braga"
+                  placeholder="Ex: Braga / Pombal"
                   className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-zinc-400 block mb-1">Provas Inscritas</label>
+              <label className="text-xs text-zinc-400 block mb-1">Provas Inscritas (separadas por vírgula)</label>
               <input
                 type="text"
                 value={compEvents}
                 onChange={e => setCompEvents(e.target.value)}
                 placeholder="400m, 200m"
+                className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-zinc-400 block mb-1">Objetivo / Marca Alvo (Opcional)</label>
+              <input
+                type="text"
+                value={compTarget}
+                onChange={e => setCompTarget(e.target.value)}
+                placeholder="Ex: Sub-50s ou Final A"
                 className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-xl p-2.5 text-xs text-white"
               />
             </div>
@@ -1007,11 +1034,38 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
                 <div key={comp.id} className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <h4 className="text-sm font-bold text-white">{comp.name}</h4>
-                      <span className="text-xs text-zinc-400">{new Date(comp.event_date).toLocaleString('pt-PT')} • {comp.location || 'Pista'}</span>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-white">{comp.name}</h4>
+                        {comp.target_result && (
+                          <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded font-mono font-semibold">
+                            Meta: {comp.target_result}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-zinc-400">
+                        {new Date(comp.event_date).toLocaleString('pt-PT', { dateStyle: 'medium', timeStyle: 'short' })} • {comp.location || 'Pista'}
+                      </span>
+                      {Array.isArray(comp.events_registered) && comp.events_registered.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {comp.events_registered.map((ev: string, idx: number) => (
+                            <span key={idx} className="text-[10px] bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-md border border-zinc-700/50">
+                              {ev}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="bg-sky-500/10 border border-sky-500/20 px-3 py-1.5 rounded-xl text-right">
-                      <div className="text-xs font-mono font-bold text-sky-400">{calculateCountdown(comp.event_date)}</div>
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <div className="bg-sky-500/10 border border-sky-500/20 px-3 py-1.5 rounded-xl text-right">
+                        <div className="text-xs font-mono font-bold text-sky-400">{calculateCountdown(comp.event_date)}</div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteCompetition(comp.id)}
+                        className="text-zinc-600 hover:text-red-400 transition-colors p-1.5 cursor-pointer"
+                        title="Eliminar competição"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1032,7 +1086,7 @@ export const AthleticsView: React.FC<AthleticsViewProps> = ({ userId }) => {
               </h3>
               <button
                 onClick={() => setEditingPb(null)}
-                className="text-zinc-500 hover:text-white p-1"
+                className="text-zinc-500 hover:text-white p-1 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

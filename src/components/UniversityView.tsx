@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, Trash2, Edit3, Clock, MapPin, AlertCircle, 
   CheckCircle2, CalendarDays, ChevronUp, ChevronDown, X, 
-  Calculator, Target, Award, BookOpen, FileText, Check
+  Calculator, Target, Award, BookOpen, FileText, Check,
+  Timer
 } from 'lucide-react';
 
 interface UniversityViewProps {
@@ -51,7 +52,7 @@ const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_
 
 export function UniversityView({ userId, isRoseTheme = false }: UniversityViewProps) {
   // === ABAS INTERNAS ===
-  const [activeTab, setActiveTab] = useState<'horario' | 'disciplinas' | 'simulador'>('horario');
+  const [activeTab, setActiveTab] = useState<'horario' | 'disciplinas' | 'simulador' | 'exames'>('horario');
 
   // === ESTADOS DO CALENDÁRIO ===
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
@@ -81,6 +82,14 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
   const [newGradeTitle, setNewGradeTitle] = useState('');
   const [newGradeScore, setNewGradeScore] = useState<string>('');
   const [newGradeMax, setNewGradeMax] = useState<string>('');
+
+  // === ESTADOS DOS EXAMES & COUNTDOWN ===
+  const [exams, setExams] = useState<any[]>([]);
+  const [examTitle, setExamTitle] = useState('');
+  const [examCourse, setExamCourse] = useState('');
+  const [examType, setExamType] = useState('Frequência');
+  const [examDate, setExamDate] = useState('');
+  const [examLocation, setExamLocation] = useState('');
 
   // === ESTADOS DO SIMULADOR DE NOTAS ===
   const [simMode, setSimMode] = useState<'absoluto' | 'percentagem'>('percentagem');
@@ -118,8 +127,11 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
 
       const { data: gData } = await supabase.from('academic_grades').select('*').eq('user_id', userId);
       if (gData) setGrades(gData);
+
+      const { data: exData } = await supabase.from('academic_exams').select('*').eq('user_id', userId).order('exam_date', { ascending: true });
+      if (exData) setExams(exData);
     } catch (err) {
-      console.error('Erro ao carregar disciplinas/notas', err);
+      console.error('Erro ao carregar dados académicos', err);
     }
   };
 
@@ -200,19 +212,13 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
     return { top, height };
   };
 
-  // ==============================================================
-  // EFEITO VIDRO (FROSTED GLASS)
-  // ==============================================================
   const getClassTheme = (type?: string) => {
-    // 1. TEMA ROSA DA TUA NAMORADA (Acrílico / Vidro Azul translúcido, limpo e sem TE/PR)
     if (isRoseTheme) {
       return { 
         card: 'bg-gradient-to-br from-sky-500/30 to-sky-600/15 backdrop-blur-xl border border-sky-400/40 text-white hover:from-sky-500/40 hover:to-sky-600/25 shadow-[0_4px_20px_rgba(56,189,248,0.15)]', 
         badge: 'hidden' 
       };
     }
-
-    // 2. A TUA CONTA (TEMA GOLD) - Cores mistas originais com vidro escuro
     switch (type) {
       case 'Teórica': return { 
         card: 'bg-gradient-to-br from-emerald-500/25 to-emerald-950/40 backdrop-blur-xl border border-emerald-500/40 text-emerald-100 hover:border-emerald-400', 
@@ -291,6 +297,46 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
   const handleDeleteGrade = async (id: string) => {
     await supabase.from('academic_grades').delete().eq('id', id);
     setGrades(grades.filter(g => g.id !== id));
+  };
+
+  // === LÓGICA DE EXAMES & COUNTDOWN ===
+  const handleAddExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!examTitle || !examDate) return;
+
+    const { error } = await supabase.from('academic_exams').insert({
+      user_id: userId,
+      title: examTitle.trim(),
+      course_name: examCourse.trim() || null,
+      exam_type: examType,
+      exam_date: new Date(examDate).toISOString(),
+      location: examLocation.trim() || null
+    });
+
+    if (error) {
+      alert(`Erro ao guardar avaliação: ${error.message}`);
+    } else {
+      setExamTitle('');
+      setExamCourse('');
+      setExamDate('');
+      setExamLocation('');
+      loadAcademicData();
+    }
+  };
+
+  const handleDeleteExam = async (id: string) => {
+    if (!confirm('Eliminar esta avaliação do calendário?')) return;
+    const { error } = await supabase.from('academic_exams').delete().eq('id', id);
+    if (!error) loadAcademicData();
+  };
+
+  const calculateCountdown = (targetDateStr: string) => {
+    const diff = new Date(targetDateStr).getTime() - new Date().getTime();
+    if (diff <= 0) return 'Concluída';
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const mins = Math.floor((diff / (1000 * 60)) % 60);
+    return `⏳ ${days}d ${hours}h ${mins}m`;
   };
 
   // === LÓGICA DO SIMULADOR ===
@@ -380,6 +426,12 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
           <CalendarDays className="w-4 h-4" /> Horário Semanal
         </button>
         <button
+          onClick={() => setActiveTab('exames')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'exames' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+        >
+          <Timer className="w-4 h-4" /> Exames & Countdown
+        </button>
+        <button
           onClick={() => setActiveTab('disciplinas')}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'disciplinas' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
         >
@@ -405,7 +457,7 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
         </div>
       )}
 
-      {/* CONTEÚDO DA ABA HORÁRIO */}
+      {/* 1. ABA HORÁRIO */}
       {activeTab === 'horario' && (
         <div className="space-y-6">
           <div className="flex justify-end">
@@ -511,8 +563,6 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
                           {dayClasses.map(c => {
                             const { top, height } = calculateCardPosition(c.start_time, c.end_time);
                             const theme = getClassTheme(c.class_type);
-                            
-                            // DETETA SE A AULA É CURTA (< 52px)
                             const isShortBlock = height < 52; 
 
                             return (
@@ -522,19 +572,16 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
                                 className={`rounded-lg p-1.5 text-xs flex overflow-hidden transition-all group z-20 ${theme.card} ${isShortBlock ? 'items-center' : 'flex-col justify-between'}`}
                               >
                                 {isShortBlock ? (
-                                  /* === LAYOUT COMPACTO (Aulas curtas) === */
                                   <div className="flex items-center justify-between w-full h-full gap-1">
                                     <span className={`font-bold text-[10px] sm:text-[11px] truncate flex-1 ${isRoseTheme ? 'text-sky-950' : 'text-white'}`}>
                                       {c.course_name}
                                     </span>
-                                    
                                     <div className="flex items-center gap-1 shrink-0">
                                       {!isRoseTheme && c.class_type && (
                                         <span className={`text-[7px] font-bold px-1 py-0.5 rounded border uppercase tracking-widest ${theme.badge}`}>
                                           {c.class_type.substring(0, 2)}
                                         </span>
                                       )}
-                                      {/* BOTÕES SEMPRE VISÍVEIS NO MOBILE (opacity-80) E COM HOVER NO DESKTOP */}
                                       <div className="flex items-center opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded p-0.5">
                                         <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 text-zinc-300 transition-colors cursor-pointer p-0.5"><Edit3 className="w-2.5 h-2.5" /></button>
                                         <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 text-zinc-300 transition-colors cursor-pointer p-0.5"><Trash2 className="w-2.5 h-2.5" /></button>
@@ -542,14 +589,12 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
                                     </div>
                                   </div>
                                 ) : (
-                                  /* === LAYOUT NORMAL (Aulas compridas) === */
                                   <>
                                     <div>
                                       <div className="flex items-start justify-between gap-1 leading-none">
                                         <span className={`font-bold text-[10px] sm:text-[11px] line-clamp-2 leading-tight ${isRoseTheme ? 'text-sky-950' : 'text-white'}`}>
                                           {c.course_name}
                                         </span>
-                                        {/* BOTÕES SEMPRE VISÍVEIS NO MOBILE (opacity-80) E COM HOVER NO DESKTOP */}
                                         <div className="flex flex-col gap-1 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0 bg-black/60 rounded p-1">
                                           <button onClick={() => handleStartEdit(c)} className="hover:text-amber-400 text-zinc-300 transition-colors cursor-pointer"><Edit3 className="w-3 h-3" /></button>
                                           <button onClick={() => handleDeleteSchedule(c.id, c.course_name)} className="hover:text-rose-400 text-zinc-300 transition-colors cursor-pointer"><Trash2 className="w-3 h-3" /></button>
@@ -589,7 +634,132 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
         </div>
       )}
 
-      {/* CONTEÚDO DA ABA DISCIPLINAS E NOTAS */}
+      {/* 2. NOVA ABA EXAMES & COUNTDOWN */}
+      {activeTab === 'exames' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <form onSubmit={handleAddExam} className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-4 h-fit">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-sky-400" /> Nova Avaliação
+            </h3>
+
+            <div>
+              <label className="text-xs text-zinc-400 block mb-1">Título da Avaliação</label>
+              <input
+                type="text"
+                value={examTitle}
+                onChange={e => setExamTitle(e.target.value)}
+                placeholder="Ex: Frequência Prática de AM"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-white"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">Tipo</label>
+                <select
+                  value={examType}
+                  onChange={e => setExamType(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-white"
+                >
+                  <option>Frequência</option>
+                  <option>Exame</option>
+                  <option>Teste</option>
+                  <option>Projeto</option>
+                  <option>Apresentação</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">Disciplina</label>
+                <input
+                  type="text"
+                  value={examCourse}
+                  onChange={e => setExamCourse(e.target.value)}
+                  placeholder="Ex: Física"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">Data e Hora</label>
+                <input
+                  type="datetime-local"
+                  value={examDate}
+                  onChange={e => setExamDate(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">Sala</label>
+                <input
+                  type="text"
+                  value={examLocation}
+                  onChange={e => setExamLocation(e.target.value)}
+                  placeholder="Ex: Anfiteatro 1"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+            >
+              Adicionar ao Calendário
+            </button>
+          </form>
+
+          <div className="lg:col-span-2 space-y-3.5">
+            <h3 className="text-sm font-bold text-white flex items-center justify-between">
+              <span>Calendário de Avaliações</span>
+              <span className="text-xs font-normal text-zinc-500">{exams.length} registos</span>
+            </h3>
+
+            {exams.length === 0 ? (
+              <div className="p-8 text-center bg-zinc-900/40 border border-zinc-800 rounded-2xl text-xs text-zinc-500">
+                Ainda não adicionaste nenhuma avaliação ao calendário.
+              </div>
+            ) : (
+              exams.map(exam => (
+                <div key={exam.id} className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-white">{exam.title}</h4>
+                        <span className="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded font-medium">
+                          {exam.exam_type}
+                        </span>
+                      </div>
+                      <span className="text-xs text-zinc-400">
+                        {new Date(exam.exam_date).toLocaleString('pt-PT', { dateStyle: 'medium', timeStyle: 'short' })} 
+                        {exam.location && ` • ${exam.location}`}
+                        {exam.course_name && ` • ${exam.course_name}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-right">
+                        <div className="text-xs font-mono font-bold text-emerald-400">{calculateCountdown(exam.exam_date)}</div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteExam(exam.id)}
+                        className="text-zinc-600 hover:text-red-400 transition-colors p-1.5 cursor-pointer"
+                        title="Eliminar avaliação"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. ABA DISCIPLINAS E NOTAS */}
       {activeTab === 'disciplinas' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
@@ -632,7 +802,6 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
                         <div className="flex items-center gap-3 flex-1 mr-2">
                           <BookOpen className="w-4 h-4 text-sky-400 shrink-0" />
                           
-                          {/* CAMPO DE EDIÇÃO OU TEXTO NORMAL */}
                           {isEditingThis ? (
                             <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
                               <input
@@ -741,7 +910,7 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
         </div>
       )}
 
-      {/* CONTEÚDO DA ABA SIMULADOR */}
+      {/* 4. ABA SIMULADOR */}
       {activeTab === 'simulador' && (
         <div className="max-w-2xl mx-auto rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-xl overflow-hidden flex flex-col">
           
@@ -757,7 +926,6 @@ export function UniversityView({ userId, isRoseTheme = false }: UniversityViewPr
                 </p>
               </div>
 
-              {/* TOGGLE MODO DE CÁLCULO */}
               <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800 shrink-0">
                 <button 
                   onClick={() => setSimMode('absoluto')} 
